@@ -1,4 +1,5 @@
 __pycache__
 .vscode
-processed_fraud_data.csv
+*.csv
+.DS_Store
 *.npy

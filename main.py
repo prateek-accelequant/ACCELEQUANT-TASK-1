@@ -46,7 +46,6 @@ def run_central_experiment(X_all, y_all, dataset_name):
     master_kernels = {}
     quantum_managers = {}
     
-    # Generate clean filesystem safe tokens
     clean_ds_name = "".join([c if c.isalnum() else "_" for c in dataset_name])
     
     for q_name, map_type in [('Quantum-ZZ', 'ZZ'), ('Quantum-CPMap', 'CPMap')]:
@@ -57,7 +56,6 @@ def run_central_experiment(X_all, y_all, dataset_name):
             res = mgr.get_resource_counts()
             print(f"   [{q_name} Layout] Physical Qubits: {res['qubits']} mapped to {config.QUBIT_BUDGET} Data Features.")
             
-            # Define file paths based on unique experiment settings
             train_cache_file = f"cache_{clean_ds_name}_{q_name}_seed{config.SEED}_train.npy"
             test_cache_file = f"cache_{clean_ds_name}_{q_name}_seed{config.SEED}_test.npy"
             
@@ -70,7 +68,6 @@ def run_central_experiment(X_all, y_all, dataset_name):
                 K_train_master = mgr.kernel.evaluate(x_vec=X_train_full)
                 K_test_master = mgr.kernel.evaluate(x_vec=X_test, y_vec=X_train_full)
                 
-                # Save computed arrays to disk for all subsequent runs
                 np.save(train_cache_file, K_train_master)
                 np.save(test_cache_file, K_test_master)
                 print(f"   [Disk Cache Hub] Quantum matrices cached to disk successfully.")
@@ -104,7 +101,7 @@ def run_central_experiment(X_all, y_all, dataset_name):
                 if 'From-Scratch SVM' in active_models:
                     scratch_clf = classical_mgr.fit_scratch_svm(X_train_sub, y_train_sub, best_params)
                     performance_log['From-Scratch SVM'][N]['f1'].append(f1_score(y_test, scratch_clf.predict(X_test)))
-                    performance_log['From-Scratch SVM'][N]['auc'].append(roc_auc_score(y_test, scratch_clf.predict_proba(X_test)[:, 1]))
+                    performance_log['From-Scratch SVM'][N]['auc'].append(roc_auc_score(y_test, scratch_clf.decision_function(X_test)))
 
             if 'XGBoost' in active_models:
                 xgb_clf = classical_mgr.fit_xgboost(X_train_sub, y_train_sub)

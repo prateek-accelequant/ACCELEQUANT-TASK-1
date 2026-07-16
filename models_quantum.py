@@ -11,6 +11,7 @@ from qiskit.circuit import ParameterVector
 from qiskit.circuit.library import ZZFeatureMap
 from qiskit_machine_learning.kernels import FidelityQuantumKernel
 from sklearn.svm import SVC
+from sklearn.calibration import CalibratedClassifierCV
 
 # Suppress warnings to maintain a clean command-line interface
 warnings.filterwarnings('ignore')
@@ -175,7 +176,18 @@ class ProductionQuantumKernelManager:
             'cnot_gates': gate_counts.get('cx', 0)
         }
 
+    def calculate_spectral_diagnostics(self, K_train):
+        """Analyzes indicators of exponential kernel matrix concentration."""
+        off_diag = K_train[~np.eye(len(K_train), dtype=bool)]
+        conc_var = off_diag.var() if len(off_diag) > 0 else 0.0
+        eigs = np.linalg.eigvalsh(K_train)
+        condition_num = eigs[-1] / max(eigs[0], 1e-12)
+        return {'variance': conc_var, 'spectrum': eigs, 'condition_number': condition_num}
+
     def fit_quantum_svc(self, K_train, y_train):
-        clf = SVC(kernel='precomputed', C=1.0, probability=True)
+        """Trains a version-safe probability calibrated precomputed SVC model."""
+        base_svc = SVC(kernel='precomputed', C=1.0)
+        # CalibratedClassifierCV wraps the default precomputed SVC to bypass future deprecations safely
+        clf = CalibratedClassifierCV(base_svc, ensemble=False, cv='prefit')
         clf.fit(K_train, y_train)
         return clf
