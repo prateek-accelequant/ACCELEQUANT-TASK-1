@@ -1,15 +1,15 @@
 # Scientific & Data Processing Stacks
-numpy==2.5.1
-pandas==3.0.4
-scipy==1.18.0
-matplotlib==3.11.0
+numpy
+pandas
+scipy
+matplotlib
 
 # Machine Learning Baselines
-scikit-learn==1.9.0
-xgboost==3.3.0
+scikit-learn
+xgboost
 
 # Quantum Core & Simulation Frameworks
-qiskit==2.4.1
-qiskit-aer==0.77.0
-qiskit-algorithms==0.4.0
-qiskit-machine-learning==0.9.0
+qiskit
+qiskit-aer
+qiskit-algorithms
+qiskit-machine-learning

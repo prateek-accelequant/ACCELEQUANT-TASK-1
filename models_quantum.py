@@ -11,7 +11,6 @@ from qiskit.circuit import ParameterVector
 from qiskit.circuit.library import ZZFeatureMap
 from qiskit_machine_learning.kernels import FidelityQuantumKernel
 from sklearn.svm import SVC
-from sklearn.calibration import CalibratedClassifierCV
 
 # Suppress warnings to maintain a clean command-line interface
 warnings.filterwarnings('ignore')
@@ -166,10 +165,19 @@ class ProductionQuantumKernelManager:
             return circuit
 
     def get_resource_counts(self):
-        basis_gates = ['h', 'rz', 'ry', 'cx']
-        unrolled = transpile(self.feature_map, basis_gates=basis_gates, optimization_level=0)
-        gate_counts = unrolled.count_ops()
-        single_gates = gate_counts.get('h', 0) + gate_counts.get('rz', 0) + gate_counts.get('ry', 0)
+        """
+        Calculates exact hardware cost by natively constructing the full 
+        compute-uncompute circuit without transpiler optimization.
+        """
+        exact_map = self.feature_map.decompose()
+        compute_uncompute_circ = exact_map.compose(exact_map.inverse())
+        gate_counts = compute_uncompute_circ.count_ops()
+        
+        single_gates = (gate_counts.get('h', 0) + 
+                        gate_counts.get('rz', 0) + 
+                        gate_counts.get('ry', 0) + 
+                        gate_counts.get('rx', 0))
+        
         return {
             'qubits': self.num_qubits,
             'single_qubit_gates': single_gates,
@@ -185,9 +193,7 @@ class ProductionQuantumKernelManager:
         return {'variance': conc_var, 'spectrum': eigs, 'condition_number': condition_num}
 
     def fit_quantum_svc(self, K_train, y_train):
-        """Trains a version-safe probability calibrated precomputed SVC model."""
-        base_svc = SVC(kernel='precomputed', C=1.0)
-        # CalibratedClassifierCV wraps the default precomputed SVC to bypass future deprecations safely
-        clf = CalibratedClassifierCV(base_svc, ensemble=False, cv='prefit')
+        """Trains a version-safe probability enabled precomputed SVC model."""
+        clf = SVC(kernel='precomputed', C=1.0, probability=True)
         clf.fit(K_train, y_train)
         return clf

@@ -15,7 +15,7 @@ RUN_MODELS = {
 }
 
 # Data Pipeline Parameters
-QUBIT_BUDGET = 2           # Maximum qubits upper bound. Data PCA targets exactly this many features.
+QUBIT_BUDGET = 8           # Maximum qubits upper bound. Data PCA targets exactly this many features.
 N_PER_CLASS_SYNTH = 400    # Synthetic dataset boundaries
 SYNTH_RADII = (1.0, 2.0)   # Concentric ring boundaries
 SYNTH_NOISE = 0.08         # Random perturbation width

@@ -11,9 +11,10 @@ from sklearn.model_selection import StratifiedKFold
 from sklearn.metrics import f1_score, roc_auc_score
 
 import config
-from data_pipeline import get_all_data
+from data_pipeline import QKEDataPipeline, get_all_data
 from models_classical import ClassicalBaselineManager
 from models_quantum import ProductionQuantumKernelManager
+from tqdm import tqdm
 
 warnings.filterwarnings('ignore')
 
@@ -80,8 +81,12 @@ def run_central_experiment(X_all, y_all, dataset_name):
 
     # --- SWEEP AND SAMPLE LOOPS ---
     for N in config.N_LIST:
-        print(f"--- Running Sweep Size: N = {N} (Slicing Cached Matrices) ---")
-        for split in range(config.N_SPLITS):
+        print(f"\n--- Running Sweep Size: N = {N} (Slicing Cached Matrices) ---")
+        
+        # Wrap the split loop in a tqdm progress bar
+        split_iterator = tqdm(range(config.N_SPLITS), desc=f"Evaluating N={N}", leave=True)
+        
+        for split in split_iterator:
             pos_idx = np.where(y_train_full == 1)[0]
             neg_idx = np.where(y_train_full == 0)[0]
             
@@ -94,16 +99,19 @@ def run_central_experiment(X_all, y_all, dataset_name):
             
             # --- Classical Baselines ---
             if 'RBF-SVC' in active_models:
+                split_iterator.set_postfix_str("Tuning & Training: RBF-SVC")
                 svc_clf, best_params = classical_mgr.fit_rbf_svc(X_train_sub, y_train_sub)
                 performance_log['RBF-SVC'][N]['f1'].append(f1_score(y_test, svc_clf.predict(X_test)))
                 performance_log['RBF-SVC'][N]['auc'].append(roc_auc_score(y_test, svc_clf.predict_proba(X_test)[:, 1]))
                 
                 if 'From-Scratch SVM' in active_models:
+                    split_iterator.set_postfix_str("Training: From-Scratch SVM")
                     scratch_clf = classical_mgr.fit_scratch_svm(X_train_sub, y_train_sub, best_params)
                     performance_log['From-Scratch SVM'][N]['f1'].append(f1_score(y_test, scratch_clf.predict(X_test)))
                     performance_log['From-Scratch SVM'][N]['auc'].append(roc_auc_score(y_test, scratch_clf.decision_function(X_test)))
 
             if 'XGBoost' in active_models:
+                split_iterator.set_postfix_str("Tuning & Training: XGBoost")
                 xgb_clf = classical_mgr.fit_xgboost(X_train_sub, y_train_sub)
                 performance_log['XGBoost'][N]['f1'].append(f1_score(y_test, xgb_clf.predict(X_test)))
                 performance_log['XGBoost'][N]['auc'].append(roc_auc_score(y_test, xgb_clf.predict_proba(X_test)[:, 1]))
@@ -111,10 +119,18 @@ def run_central_experiment(X_all, y_all, dataset_name):
             # --- Quantum Baselines ---
             for q_name in ['Quantum-ZZ', 'Quantum-CPMap']:
                 if q_name in active_models:
+                    split_iterator.set_postfix_str(f"Fitting: {q_name}")
                     K_train_sub = master_kernels[q_name]['train'][np.ix_(sub_idx, sub_idx)]
                     K_test_sub = master_kernels[q_name]['test'][:, sub_idx]
                     
-                    total_circs = (len(X_train_sub)**2) + (len(X_test) * len(X_train_sub))
+                    # Exact unique circuit evaluations
+                    n_train = len(X_train_sub)
+                    n_test = len(X_test)
+                    unique_train_circs = (n_train * (n_train - 1)) // 2
+                    unique_test_circs = n_test * n_train
+                    total_circs = unique_train_circs + unique_test_circs
+                    
+                    # Extract exact native circuit costs
                     res_counts = quantum_managers[q_name].get_resource_counts()
                     cost_log[q_name][N]['circuits'] += total_circs
                     cost_log[q_name][N]['single_qubit'] += total_circs * res_counts['single_qubit_gates']
@@ -124,10 +140,12 @@ def run_central_experiment(X_all, y_all, dataset_name):
                     performance_log[q_name][N]['f1'].append(f1_score(y_test, q_clf.predict(K_test_sub)))
                     performance_log[q_name][N]['auc'].append(roc_auc_score(y_test, q_clf.predict_proba(K_test_sub)[:, 1]))
 
-    print(f"\n==================================================================\nMETRICS REPORT FOR: {dataset_name}\n==================================================================")
+    # --- TEXT FILE REPORT GENERATOR ---
+    report_str = f"\n{'='*66}\nMETRICS REPORT FOR: {dataset_name}\n{'='*66}\n"
     summary_data = {m: {'N': [], 'F1': [], 'AUC': []} for m in active_models}
+    
     for model in active_models:
-        print(f"\n>> Model Family: {model}")
+        report_str += f"\n>> Model Family: {model}\n"
         for N in config.N_LIST:
             f1_m, f1_ci = calculate_95_ci(performance_log[model][N]['f1'])
             auc_m, auc_ci = calculate_95_ci(performance_log[model][N]['auc'])
@@ -138,28 +156,49 @@ def run_central_experiment(X_all, y_all, dataset_name):
             summary_data[model]['N'].append(N)
             summary_data[model]['F1'].append(f1_m)
             summary_data[model]['AUC'].append(auc_m)
-            print(f"   N={N:3d} | F1: {f1_m:.4f} ± {f1_ci:.4f} | AUC: {auc_m:.4f} ± {auc_ci:.4f}")
+            
+            report_str += f"   N={N:3d} | F1: {f1_m:.4f} ± {f1_ci:.4f} | AUC: {auc_m:.4f} ± {auc_ci:.4f}\n"
             if model in ['Quantum-ZZ', 'Quantum-CPMap']:
-                print(f"         [Accumulated Resource Cost] Circuits: {circs} | Single Gates: {single_g} | CNOTs: {cnot_g}")
+                report_str += f"         [Accumulated Resource Cost] Circuits: {circs} | Single Gates: {single_g} | CNOTs: {cnot_g}\n"
             
         if model in ['Quantum-ZZ', 'Quantum-CPMap']:
-            print(f"      [Global Spectral Diagnostics] Concentration Variance: {spectral_log[model]['variance']:.2e} | Condition No: {spectral_log[model]['condition_number']:.2e}")
+            report_str += f"      [Global Spectral Diagnostics] Concentration Variance: {spectral_log[model]['variance']:.2e} | Condition No: {spectral_log[model]['condition_number']:.2e}\n"
+            
+    print(report_str)
+    
+    os.makedirs("results", exist_ok=True)
+    log_path = os.path.join("results", f"summary_{clean_ds_name}.txt")
+    with open(log_path, "w") as f:
+        f.write(report_str)
+        
+    print(f"\n[Log Hub] Metrics report safely saved to '{log_path}'")
             
     return summary_data
 
 if __name__ == "__main__":
-    class LocalMockKernel:
-        def evaluate(self, x_vec, y_vec=None):
-            target_y = x_vec if y_vec is None else y_vec
-            sq_dists = np.sum(x_vec**2, axis=1, keepdims=True) + np.sum(target_y**2, axis=1) - 2 * np.dot(x_vec, target_y.T)
-            return np.exp(-0.15 * sq_dists)
-            
     print("[Pipeline Setup] Preloading data distributions...")
-    (X_synth, y_synth), (X_real, y_real), (X_qnative, y_qnative) = get_all_data(qkernel=LocalMockKernel())
+    
+    zz_mgr = ProductionQuantumKernelManager(map_type='ZZ')
+    cpmap_mgr = ProductionQuantumKernelManager(map_type='CPMap')
+    
+    pipeline = QKEDataPipeline(seed=config.SEED)
+    X_synth_raw, y_synth = pipeline.generate_synthetic_shells()
+    X_synth = pipeline.preprocess(X_synth_raw)
+    
+    try:
+        X_real_raw, y_real = pipeline.load_and_rebalance_real_data()
+        X_real = pipeline.preprocess(X_real_raw)
+    except FileNotFoundError:
+        X_real, y_real = None, None
+
+    X_qnative_ZZ, y_qnative_ZZ = pipeline.generate_quantum_native(X_synth, zz_mgr.kernel)
+    X_qnative_CPMap, y_qnative_CPMap = pipeline.generate_quantum_native(X_synth, cpmap_mgr.kernel)
     
     datasets_to_run = [
         ("Primary Synthetic (Shells)", X_synth, y_synth),
-        ("Positive Control (Quantum Labels)", X_qnative, y_qnative)
+        ("Positive Control (ZZ-Generated)", X_qnative_ZZ, y_qnative_ZZ),
+        ("Positive Control (CPMap-Generated)", X_qnative_CPMap, y_qnative_CPMap),
+        ("Rebalanced Real Data", X_real, y_real)
     ]
     
     all_dataset_plots = {}
@@ -198,4 +237,10 @@ if __name__ == "__main__":
         
     plt.suptitle("Unified Model Sample-Efficiency Curves Comparison", fontsize=14, fontweight='bold', y=0.98)
     plt.tight_layout()
+    
+    os.makedirs("results", exist_ok=True)
+    save_path = os.path.join("results", "8_qubit_Task1_run.png")
+    fig.savefig(save_path, dpi=300, bbox_inches='tight')
+    print(f"\n[Plot Hub] Execution complete. Figure safely saved to '{save_path}'")
+    
     plt.show()
