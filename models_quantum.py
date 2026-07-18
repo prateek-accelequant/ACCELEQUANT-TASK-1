@@ -50,7 +50,7 @@ class ProductionQuantumKernelManager:
 
         self._inject_progress_bar()
 
-    def _inject_progress_bar(self, batch_size=1000):
+    def _inject_progress_bar(self, batch_size=400):
             import types
             import numpy as np
             from tqdm import tqdm
