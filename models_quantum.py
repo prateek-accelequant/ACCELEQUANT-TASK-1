@@ -11,6 +11,7 @@ from qiskit.circuit import ParameterVector
 from qiskit.circuit.library import ZZFeatureMap
 from qiskit_machine_learning.kernels import FidelityQuantumKernel
 from sklearn.svm import SVC
+from sklearn.model_selection import GridSearchCV
 
 # Suppress warnings to maintain a clean command-line interface
 warnings.filterwarnings('ignore')
@@ -34,9 +35,10 @@ class ProductionQuantumKernelManager:
     def __init__(self, map_type='CPMap', use_noise=False, shots=1024):
         self.map_type = map_type
         self.use_noise = use_noise
-        self.shots = shots
         
         import config
+        self.shots = config.SHOTS # Ensure strictly bound to config
+        
         self.num_features = config.QUBIT_BUDGET
         self.num_qubits = self._calculate_optimal_qubits()
         self.feature_map = self._generate_feature_map()
@@ -256,7 +258,17 @@ class ProductionQuantumKernelManager:
         return {'variance': conc_var, 'spectrum': eigs, 'condition_number': condition_num}
 
     def fit_quantum_svc(self, K_train, y_train):
-        """Trains a version-safe probability enabled precomputed SVC model."""
-        clf = SVC(kernel='precomputed', C=1.0, probability=True)
-        clf.fit(K_train, y_train)
-        return clf
+        """Trains a version-safe probability enabled precomputed SVC model with uniform hyperparameter tuning."""
+        import config
+        
+        # Ensures that the Quantum Kernel evaluates the exact same hyperparameter landscape 
+        # as the Classical RBF Kernel using CV=3 and F1 scoring.
+        grid = GridSearchCV(
+            SVC(kernel='precomputed', probability=True, random_state=config.SEED), 
+            config.QSVC_PARAM_GRID, 
+            cv=3, 
+            scoring='f1', 
+            n_jobs=-1
+        )
+        grid.fit(K_train, y_train)
+        return grid.best_estimator_

@@ -27,20 +27,26 @@ N_ANCHORS = 30
 MARGIN_PERCENTAGE = 0.1
 
 # Quantum Execution Parameters
-REPS = 1                   # Number of feature-map repetitions down the timeline
+REPS = 1                   # Strictly fixed to 1 for fair gate count comparisons
 ENTANGLEMENT = 'linear'    # ZZ Map connection topology ('linear' or 'full')
-SHOTS = 1024               # Sample iterations per circuit evaluation
+SHOTS = 1024               # Sample iterations per circuit evaluation fixed
 USE_NISQ_NOISE = False     # Toggle between clean Aer vs Noisy Aer models
 
 # Experimental Sweep Strategy
 N_LIST = [50, 100, 200, 500]  # Sample budget sweep sizes
 N_SPLITS = 5               # Resampling iterations per sweep budget
-OUTER_SPLITS = 5
+OUTER_SPLITS = 5           # Train/Test outer separation
 
 # Hyperparameter Search Grids
+# Used for Classical RBF-SVC
 SVC_PARAM_GRID = {
     'C': [0.1, 1, 10, 100],
     'gamma': ['scale', 'auto', 0.01, 0.1]
+}
+
+# Used for Quantum Precomputed SVC (gamma doesn't apply to precomputed kernels)
+QSVC_PARAM_GRID = {
+    'C': [0.1, 1, 10, 100]
 }
 
 XGB_PARAM_GRID = {
