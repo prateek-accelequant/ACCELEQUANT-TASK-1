@@ -1,8 +1,7 @@
 """
 Module: models_quantum.py
 Description: Pure Quantum Execution Engine running exclusively on AerSimulator primitives.
-             Dynamically solves for optimal qubit spaces for CPMap based on incoming feature dimensions.
-             Features version-safe fallback handling for modern Qiskit primitives.
+             Hardware Optimized: Hands full control to C++ OpenMP for 100% CPU core saturation.
 """
 import numpy as np
 import warnings
@@ -13,7 +12,6 @@ from qiskit_machine_learning.kernels import FidelityQuantumKernel
 from sklearn.svm import SVC
 from sklearn.model_selection import GridSearchCV
 
-# Suppress warnings to maintain a clean command-line interface
 warnings.filterwarnings('ignore')
 
 # --- VERSION-SAFE PRIMITIVE IMPORTS ---
@@ -37,7 +35,7 @@ class ProductionQuantumKernelManager:
         self.use_noise = use_noise
         
         import config
-        self.shots = config.SHOTS # Ensure strictly bound to config
+        self.shots = config.SHOTS 
         
         self.num_features = config.QUBIT_BUDGET
         self.num_qubits = self._calculate_optimal_qubits()
@@ -50,46 +48,6 @@ class ProductionQuantumKernelManager:
             self.fidelity = ComputeUncompute(sampler=self.sampler)
             self.kernel = FidelityQuantumKernel(feature_map=self.feature_map, fidelity=self.fidelity)
 
-        self._inject_progress_bar()
-
-    def _inject_progress_bar(self, batch_size=400):
-            import types
-            import numpy as np
-            from tqdm import tqdm
-            from concurrent.futures import ThreadPoolExecutor, as_completed
-            import multiprocessing
-            
-            original_evaluate = self.kernel.evaluate
-            
-            def batched_evaluate(kernel_self, x_vec, y_vec=None):
-                target_y = x_vec if y_vec is None else y_vec
-                N_x = len(x_vec)
-                
-                K = np.zeros((N_x, len(target_y)))
-                total_overlaps = N_x * len(target_y)
-                
-                print(f"\n   [Quantum Hardware] Routing {total_overlaps} circuit overlaps via ThreadPool (GPU-Safe)...")
-                
-                # Utilize all CPU cores via Threads to construct circuits simultaneously, 
-                # bypassing the GIL without corrupting the shared CUDA memory context.
-                max_threads = multiprocessing.cpu_count()
-                
-                with ThreadPoolExecutor(max_workers=max_threads) as executor:
-                    futures = {}
-                    for i in range(0, N_x, batch_size):
-                        x_batch = x_vec[i : i + batch_size]
-                        
-                        # Offload the parameter binding and primitive execution to background threads
-                        future = executor.submit(original_evaluate, x_vec=x_batch, y_vec=target_y)
-                        futures[future] = i
-                        
-                    for future in tqdm(as_completed(futures), total=len(futures), desc=f"[{self.map_type} Kernel Evaluation]", leave=True):
-                        i = futures[future]
-                        K[i : i + batch_size, :] = future.result()
-                        
-                return K
-                
-            self.kernel.evaluate = types.MethodType(batched_evaluate, self.kernel)
 
     def _calculate_optimal_qubits(self):
         import config
@@ -109,22 +67,28 @@ class ProductionQuantumKernelManager:
             return config.QUBIT_BUDGET
 
     def _initialize_sampler_primitive(self):
-            # Define universal multi-core CPU options to accelerate preprocessing and fallbacks
+            import multiprocessing
+            cores = multiprocessing.cpu_count()
+
+            # --- HARDWARE SATURATION ENGINE ---
+            # By targeting the CPU for 8-qubit circuits, we bypass PCI-E GPU latency. 
+            # We force max_parallel_experiments to match total system cores, enabling 
+            # C++ OpenMP to crunch the statevectors perfectly in parallel.
             cpu_options = {
-                "max_parallel_threads": 0,       # 0 = Use all available CPU cores automatically
-                "max_parallel_experiments": 0,   # 0 = Run maximum simultaneous circuits
-                "max_parallel_shots": 1          # Dedicate threads to circuits, not individual shots
+                "max_parallel_threads": 0,           # Let OpenMP auto-tune thread bindings
+                "max_parallel_experiments": cores,   # Distribute circuit evaluations across ALL cores
+                "max_parallel_shots": 1,         
+                "batched_shots_optimization": True   # Forces parameter binding to happen natively in C++
             }
 
             if USE_AER_PRIMITIVE == "V2":
                 from qiskit_aer import AerSimulator
-                # Merge GPU flag with CPU threading limits
-                backend = AerSimulator(method="statevector", device="GPU", **cpu_options)
+                backend = AerSimulator(method="statevector", device="CPU", **cpu_options)
                 return None
                 
             if not self.use_noise:
                 return AerSampler(
-                    backend_options={"method": "statevector", "device": "GPU", **cpu_options}, 
+                    backend_options={"method": "statevector", "device": "CPU", **cpu_options}, 
                     options={"shots": None}
                 )
                 
@@ -140,13 +104,13 @@ class ProductionQuantumKernelManager:
             
             if USE_AER_PRIMITIVE:
                 return AerSampler(
-                    backend_options={"noise_model": noise_model, "method": "density_matrix", "device": "GPU", **cpu_options}, 
+                    backend_options={"noise_model": noise_model, "method": "density_matrix", "device": "CPU", **cpu_options}, 
                     options={"shots": self.shots}
                 )
             else:
                 return AerSampler(
                     options={
-                        "backend_options": {"method": "density_matrix", "noise_model": noise_model, "device": "GPU", **cpu_options}, 
+                        "backend_options": {"method": "density_matrix", "noise_model": noise_model, "device": "CPU", **cpu_options}, 
                         "shots": self.shots
                     }
                 )
@@ -260,9 +224,6 @@ class ProductionQuantumKernelManager:
     def fit_quantum_svc(self, K_train, y_train):
         """Trains a version-safe probability enabled precomputed SVC model with uniform hyperparameter tuning."""
         import config
-        
-        # Ensures that the Quantum Kernel evaluates the exact same hyperparameter landscape 
-        # as the Classical RBF Kernel using CV=3 and F1 scoring.
         grid = GridSearchCV(
             SVC(kernel='precomputed', probability=True, random_state=config.SEED), 
             config.QSVC_PARAM_GRID, 

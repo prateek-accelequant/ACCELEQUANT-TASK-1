@@ -1,14 +1,19 @@
 """
 Module: main.py
 Optimized Edition: Employs persistent disk caching (.npy) to bypass Aer calculations on duplicate runs.
+Hardware Optimized: Unleashes native C++ OpenMP for 100% CPU core saturation.
 """
 import os
 import multiprocessing
 
 # --- UNLEASH C++ OPENMP THREADING ---
-# Force the OS to give Qiskit Aer's C++ backend access to all 24 cores
-os.environ['OMP_NUM_THREADS'] = str(multiprocessing.cpu_count())
-os.environ['RAY_NUM_THREADS'] = str(multiprocessing.cpu_count())
+# We are shifting the workload natively to Aer's C++ backend. 
+# We instruct the OS to give Qiskit Aer access to EVERY available core on the Gcloud server.
+total_cores = str(multiprocessing.cpu_count())
+os.environ['OMP_NUM_THREADS'] = total_cores
+os.environ['RAY_NUM_THREADS'] = total_cores
+os.environ['MKL_NUM_THREADS'] = total_cores
+os.environ['OPENBLAS_NUM_THREADS'] = total_cores
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -25,12 +30,9 @@ from tqdm import tqdm
 
 warnings.filterwarnings('ignore')
 
-# --- KILL PYTHON MULTIPROCESSING ---
-# Python workers throttle Aer's internal C++. Force 1 Python master process
-# so the OpenMP backend is allowed to take over.
+# Unlock Qiskit's internal classical preprocessing to use all available CPU cores 
 from qiskit_algorithms.utils import algorithm_globals
-algorithm_globals.num_workers = 5
-
+algorithm_globals.num_workers = multiprocessing.cpu_count()
 
 
 def calculate_95_ci(data):
@@ -64,7 +66,7 @@ def run_central_experiment(X_all, y_all, dataset_name):
     
     clean_ds_name = "".join([c if c.isalnum() else "_" for c in dataset_name])
     
-    for q_name, map_type in [('Quantum-ZZ', 'ZZ'), ('Quantum-CPMap', 'CPMap')]:
+    for q_name, map_type in [('Quantum-ZZ', 'Quantum-CPMap')]:
         if config.RUN_MODELS[q_name]:
             mgr = ProductionQuantumKernelManager(map_type=map_type)
             quantum_managers[q_name] = mgr
@@ -80,7 +82,7 @@ def run_central_experiment(X_all, y_all, dataset_name):
                 K_train_master = np.load(train_cache_file)
                 K_test_master = np.load(test_cache_file)
             else:
-                print(f"   [Simulation Engine] Cache not found. Executing quantum hardware simulator sweeps...")
+                print(f"   [Simulation Engine] Executing native C++ OpenMP sweep for {q_name}. (Check CPU utilization now!)...")
                 K_train_master = mgr.kernel.evaluate(x_vec=X_train_full)
                 K_test_master = mgr.kernel.evaluate(x_vec=X_test, y_vec=X_train_full)
                 
@@ -98,18 +100,19 @@ def run_central_experiment(X_all, y_all, dataset_name):
     for N in config.N_LIST:
         print(f"\n--- Running Sweep Size: N = {N} (Slicing Cached Matrices) ---")
         
-        # Wrap the split loop in a tqdm progress bar
         split_iterator = tqdm(range(config.N_SPLITS), desc=f"Evaluating N={N}", leave=True)
         
         for split in split_iterator:
             pos_idx = np.where(y_train_full == 1)[0]
             neg_idx = np.where(y_train_full == 0)[0]
             
+            # Dynamically allow replacement only if the budget N//2 exceeds the available data pool
             replace_pos = (N // 2 > len(pos_idx))
             replace_neg = (N // 2 > len(neg_idx))
             
             sampled_pos = rng.choice(pos_idx, size=N // 2, replace=replace_pos)
             sampled_neg = rng.choice(neg_idx, size=N // 2, replace=replace_neg)
+            
             sub_idx = rng.permutation(np.concatenate([sampled_pos, sampled_neg]))
             
             X_train_sub = X_train_full[sub_idx]
