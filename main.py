@@ -105,8 +105,11 @@ def run_central_experiment(X_all, y_all, dataset_name):
             pos_idx = np.where(y_train_full == 1)[0]
             neg_idx = np.where(y_train_full == 0)[0]
             
-            sampled_pos = rng.choice(pos_idx, size=N // 2, replace=False)
-            sampled_neg = rng.choice(neg_idx, size=N // 2, replace=False)
+            replace_pos = (N // 2 > len(pos_idx))
+            replace_neg = (N // 2 > len(neg_idx))
+            
+            sampled_pos = rng.choice(pos_idx, size=N // 2, replace=replace_pos)
+            sampled_neg = rng.choice(neg_idx, size=N // 2, replace=replace_neg)
             sub_idx = rng.permutation(np.concatenate([sampled_pos, sampled_neg]))
             
             X_train_sub = X_train_full[sub_idx]
