@@ -2,9 +2,16 @@
 Module: main.py
 Optimized Edition: Employs persistent disk caching (.npy) to bypass Aer calculations on duplicate runs.
 """
+import os
+import multiprocessing
+
+# --- UNLEASH C++ OPENMP THREADING ---
+# Force the OS to give Qiskit Aer's C++ backend access to all 24 cores
+os.environ['OMP_NUM_THREADS'] = str(multiprocessing.cpu_count())
+os.environ['RAY_NUM_THREADS'] = str(multiprocessing.cpu_count())
+
 import numpy as np
 import matplotlib.pyplot as plt
-import os
 import warnings
 from scipy import stats
 from sklearn.model_selection import StratifiedKFold
@@ -17,6 +24,14 @@ from models_quantum import ProductionQuantumKernelManager
 from tqdm import tqdm
 
 warnings.filterwarnings('ignore')
+
+# --- KILL PYTHON MULTIPROCESSING ---
+# Python workers throttle Aer's internal C++. Force 1 Python master process
+# so the OpenMP backend is allowed to take over.
+from qiskit_algorithms.utils import algorithm_globals
+algorithm_globals.num_workers = 5
+
+
 
 def calculate_95_ci(data):
     mean = np.mean(data)
@@ -191,8 +206,8 @@ if __name__ == "__main__":
     except FileNotFoundError:
         X_real, y_real = None, None
 
-    X_qnative_ZZ, y_qnative_ZZ = pipeline.generate_quantum_native(X_synth, zz_mgr.kernel)
-    X_qnative_CPMap, y_qnative_CPMap = pipeline.generate_quantum_native(X_synth, cpmap_mgr.kernel)
+    X_qnative_ZZ, y_qnative_ZZ = pipeline.generate_quantum_native(X_synth, zz_mgr.kernel, map_name="ZZ")
+    X_qnative_CPMap, y_qnative_CPMap = pipeline.generate_quantum_native(X_synth, cpmap_mgr.kernel, map_name="CPMap")
     
     datasets_to_run = [
         ("Primary Synthetic (Shells)", X_synth, y_synth),

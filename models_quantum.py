@@ -48,6 +48,47 @@ class ProductionQuantumKernelManager:
             self.fidelity = ComputeUncompute(sampler=self.sampler)
             self.kernel = FidelityQuantumKernel(feature_map=self.feature_map, fidelity=self.fidelity)
 
+        self._inject_progress_bar()
+
+    def _inject_progress_bar(self, batch_size=1000):
+            import types
+            import numpy as np
+            from tqdm import tqdm
+            from concurrent.futures import ThreadPoolExecutor, as_completed
+            import multiprocessing
+            
+            original_evaluate = self.kernel.evaluate
+            
+            def batched_evaluate(kernel_self, x_vec, y_vec=None):
+                target_y = x_vec if y_vec is None else y_vec
+                N_x = len(x_vec)
+                
+                K = np.zeros((N_x, len(target_y)))
+                total_overlaps = N_x * len(target_y)
+                
+                print(f"\n   [Quantum Hardware] Routing {total_overlaps} circuit overlaps via ThreadPool (GPU-Safe)...")
+                
+                # Utilize all CPU cores via Threads to construct circuits simultaneously, 
+                # bypassing the GIL without corrupting the shared CUDA memory context.
+                max_threads = multiprocessing.cpu_count()
+                
+                with ThreadPoolExecutor(max_workers=max_threads) as executor:
+                    futures = {}
+                    for i in range(0, N_x, batch_size):
+                        x_batch = x_vec[i : i + batch_size]
+                        
+                        # Offload the parameter binding and primitive execution to background threads
+                        future = executor.submit(original_evaluate, x_vec=x_batch, y_vec=target_y)
+                        futures[future] = i
+                        
+                    for future in tqdm(as_completed(futures), total=len(futures), desc=f"[{self.map_type} Kernel Evaluation]", leave=True):
+                        i = futures[future]
+                        K[i : i + batch_size, :] = future.result()
+                        
+                return K
+                
+            self.kernel.evaluate = types.MethodType(batched_evaluate, self.kernel)
+
     def _calculate_optimal_qubits(self):
         import config
         if self.map_type == 'ZZ':
@@ -66,25 +107,47 @@ class ProductionQuantumKernelManager:
             return config.QUBIT_BUDGET
 
     def _initialize_sampler_primitive(self):
-        if USE_AER_PRIMITIVE == "V2":
-            return None
-        if not self.use_noise:
-            return AerSampler(options={"shots": self.shots})
+            # Define universal multi-core CPU options to accelerate preprocessing and fallbacks
+            cpu_options = {
+                "max_parallel_threads": 0,       # 0 = Use all available CPU cores automatically
+                "max_parallel_experiments": 0,   # 0 = Run maximum simultaneous circuits
+                "max_parallel_shots": 1          # Dedicate threads to circuits, not individual shots
+            }
+
+            if USE_AER_PRIMITIVE == "V2":
+                from qiskit_aer import AerSimulator
+                # Merge GPU flag with CPU threading limits
+                backend = AerSimulator(method="statevector", device="GPU", **cpu_options)
+                return None
+                
+            if not self.use_noise:
+                return AerSampler(
+                    backend_options={"method": "statevector", "device": "GPU", **cpu_options}, 
+                    options={"shots": None}
+                )
+                
+            from qiskit_aer.noise import NoiseModel, depolarizing_error, thermal_relaxation_error
+            noise_model = NoiseModel()
+            p_depol = 0.02
+            error_depol = depolarizing_error(p_depol, 2)
+            noise_model.add_all_qubit_quantum_error(error_depol, ['cx'])
             
-        from qiskit_aer.noise import NoiseModel, depolarizing_error, thermal_relaxation_error
-        noise_model = NoiseModel()
-        p_depol = 0.02
-        error_depol = depolarizing_error(p_depol, 2)
-        noise_model.add_all_qubit_quantum_error(error_depol, ['cx'])
-        
-        t1, t2, gate_time = 50e-6, 70e-6, 35e-9
-        error_thermal = thermal_relaxation_error(t1, t2, gate_time)
-        noise_model.add_all_qubit_quantum_error(error_thermal, ['rz', 'x', 'h'])
-        
-        if USE_AER_PRIMITIVE:
-            return AerSampler(backend_options={"noise_model": noise_model, "method": "automatic"}, options={"shots": self.shots})
-        else:
-            return AerSampler(options={"backend_options": {"method": "automatic", "noise_model": noise_model}, "shots": self.shots})
+            t1, t2, gate_time = 50e-6, 70e-6, 35e-9
+            error_thermal = thermal_relaxation_error(t1, t2, gate_time)
+            noise_model.add_all_qubit_quantum_error(error_thermal, ['rz', 'x', 'h'])
+            
+            if USE_AER_PRIMITIVE:
+                return AerSampler(
+                    backend_options={"noise_model": noise_model, "method": "density_matrix", "device": "GPU", **cpu_options}, 
+                    options={"shots": self.shots}
+                )
+            else:
+                return AerSampler(
+                    options={
+                        "backend_options": {"method": "density_matrix", "noise_model": noise_model, "device": "GPU", **cpu_options}, 
+                        "shots": self.shots
+                    }
+                )
 
     @staticmethod
     def get_custom_c_gate():

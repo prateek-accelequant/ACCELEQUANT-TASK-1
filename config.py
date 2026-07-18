@@ -46,5 +46,7 @@ SVC_PARAM_GRID = {
 XGB_PARAM_GRID = {
     'max_depth': [3, 5],
     'learning_rate': [0.05, 0.1],
-    'n_estimators': [50, 100]
+    'n_estimators': [50, 100],
+    'n_jobs': [-1],
+    'device': ['cuda']
 }
