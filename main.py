@@ -66,7 +66,7 @@ def run_central_experiment(X_all, y_all, dataset_name):
     
     clean_ds_name = "".join([c if c.isalnum() else "_" for c in dataset_name])
     
-    for q_name, map_type in [('Quantum-ZZ', 'Quantum-CPMap')]:
+    for q_name, map_type in [('Quantum-ZZ', 'ZZ'), ('Quantum-CPMap', 'CPMap')]:
         if config.RUN_MODELS[q_name]:
             mgr = ProductionQuantumKernelManager(map_type=map_type)
             quantum_managers[q_name] = mgr
