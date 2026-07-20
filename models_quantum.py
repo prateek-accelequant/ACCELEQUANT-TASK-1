@@ -75,11 +75,21 @@ class ProductionQuantumKernelManager:
             # We force max_parallel_experiments to match total system cores, enabling 
             # C++ OpenMP to crunch the statevectors perfectly in parallel.
             cpu_options = {
-                "max_parallel_threads": 0,           # Let OpenMP auto-tune thread bindings
-                "max_parallel_experiments": cores,   # Distribute circuit evaluations across ALL cores
-                "max_parallel_shots": 1,         
-                "batched_shots_optimization": True   # Forces parameter binding to happen natively in C++
+                "max_parallel_threads": 0,
+                "max_parallel_experiments": cores,
+                "max_parallel_shots": 1,
+                "batched_shots_optimization": True
             }
+
+            # Add GPU targeting flag
+            gpu_options = cpu_options.copy()
+            gpu_options["device"] = "GPU"
+
+            if not self.use_noise:
+                return AerSampler(
+                    backend_options={"method": "statevector", **gpu_options}, 
+                    options={"shots": None}
+                )
 
             if USE_AER_PRIMITIVE == "V2":
                 from qiskit_aer import AerSimulator

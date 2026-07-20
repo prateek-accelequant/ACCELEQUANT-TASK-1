@@ -4,41 +4,41 @@ METRICS REPORT FOR: Positive Control (CPMap-Generated)
 ==================================================================
 
 >> Model Family: RBF-SVC
-   N= 50 | F1: 0.8517 Â± 0.0589 | AUC: 0.9546 Â± 0.0114
-   N=100 | F1: 0.9037 Â± 0.0384 | AUC: 0.9742 Â± 0.0100
-   N=200 | F1: 0.9228 Â± 0.0495 | AUC: 0.9822 Â± 0.0142
-   N=500 | F1: 0.9725 Â± 0.0119 | AUC: 0.9964 Â± 0.0033
+   N= 50 | F1: 0.8517 ± 0.0589 | AUC: 0.9546 ± 0.0114
+   N=100 | F1: 0.9037 ± 0.0384 | AUC: 0.9742 ± 0.0100
+   N=200 | F1: 0.9228 ± 0.0495 | AUC: 0.9822 ± 0.0142
+   N=500 | F1: 0.9725 ± 0.0119 | AUC: 0.9964 ± 0.0033
 
 >> Model Family: From-Scratch SVM
-   N= 50 | F1: 0.8517 Â± 0.0589 | AUC: 0.9546 Â± 0.0113
-   N=100 | F1: 0.9037 Â± 0.0384 | AUC: 0.9742 Â± 0.0100
-   N=200 | F1: 0.9228 Â± 0.0495 | AUC: 0.9819 Â± 0.0148
-   N=500 | F1: 0.9725 Â± 0.0119 | AUC: 0.9964 Â± 0.0034
+   N= 50 | F1: 0.8517 ± 0.0589 | AUC: 0.9546 ± 0.0114
+   N=100 | F1: 0.9037 ± 0.0384 | AUC: 0.9742 ± 0.0100
+   N=200 | F1: 0.9228 ± 0.0495 | AUC: 0.9820 ± 0.0147
+   N=500 | F1: 0.9725 ± 0.0119 | AUC: 0.9964 ± 0.0034
 
 >> Model Family: XGBoost
-   N= 50 | F1: 0.6785 Â± 0.0580 | AUC: 0.7978 Â± 0.0699
-   N=100 | F1: 0.7694 Â± 0.0684 | AUC: 0.8776 Â± 0.0440
-   N=200 | F1: 0.8174 Â± 0.0578 | AUC: 0.9208 Â± 0.0202
-   N=500 | F1: 0.8938 Â± 0.0152 | AUC: 0.9659 Â± 0.0065
+   N= 50 | F1: 0.6957 ± 0.0578 | AUC: 0.8067 ± 0.0647
+   N=100 | F1: 0.7884 ± 0.0563 | AUC: 0.8780 ± 0.0435
+   N=200 | F1: 0.7885 ± 0.0713 | AUC: 0.9147 ± 0.0283
+   N=500 | F1: 0.8854 ± 0.0131 | AUC: 0.9651 ± 0.0058
 
 >> Model Family: Quantum-ZZ
-   N= 50 | F1: 0.7166 Â± 0.0659 | AUC: 0.5600 Â± 0.3455
+   N= 50 | F1: 0.7166 ± 0.0659 | AUC: 0.5600 ± 0.3455
          [Accumulated Resource Cost] Circuits: 43125 | Single Gates: 690000 | CNOTs: 1207500
-   N=100 | F1: 0.7870 Â± 0.0552 | AUC: 0.8171 Â± 0.0426
+   N=100 | F1: 0.7870 ± 0.0552 | AUC: 0.8171 ± 0.0426
          [Accumulated Resource Cost] Circuits: 98750 | Single Gates: 1580000 | CNOTs: 2765000
-   N=200 | F1: 0.8465 Â± 0.0127 | AUC: 0.8836 Â± 0.0199
+   N=200 | F1: 0.8465 ± 0.0127 | AUC: 0.8836 ± 0.0199
          [Accumulated Resource Cost] Circuits: 247500 | Single Gates: 3960000 | CNOTs: 6930000
-   N=500 | F1: 0.8919 Â± 0.0172 | AUC: 0.9187 Â± 0.0108
+   N=500 | F1: 0.8919 ± 0.0172 | AUC: 0.9187 ± 0.0108
          [Accumulated Resource Cost] Circuits: 993750 | Single Gates: 15900000 | CNOTs: 27825000
       [Global Spectral Diagnostics] Concentration Variance: 3.90e-04 | Condition No: 5.91e+01
 
 >> Model Family: Quantum-CPMap
-   N= 50 | F1: 0.8880 Â± 0.0473 | AUC: 0.9670 Â± 0.0097
+   N= 50 | F1: 0.8880 ± 0.0473 | AUC: 0.9670 ± 0.0097
          [Accumulated Resource Cost] Circuits: 43125 | Single Gates: 3191250 | CNOTs: 1811250
-   N=100 | F1: 0.9180 Â± 0.0520 | AUC: 0.9819 Â± 0.0165
+   N=100 | F1: 0.9180 ± 0.0520 | AUC: 0.9819 ± 0.0165
          [Accumulated Resource Cost] Circuits: 98750 | Single Gates: 7307500 | CNOTs: 4147500
-   N=200 | F1: 0.9457 Â± 0.0624 | AUC: 0.9881 Â± 0.0129
+   N=200 | F1: 0.9457 ± 0.0624 | AUC: 0.9881 ± 0.0129
          [Accumulated Resource Cost] Circuits: 247500 | Single Gates: 18315000 | CNOTs: 10395000
-   N=500 | F1: 0.9948 Â± 0.0068 | AUC: 0.9999 Â± 0.0003
+   N=500 | F1: 0.9948 ± 0.0068 | AUC: 0.9999 ± 0.0003
          [Accumulated Resource Cost] Circuits: 993750 | Single Gates: 73537500 | CNOTs: 41737500
       [Global Spectral Diagnostics] Concentration Variance: 4.31e-02 | Condition No: 8.44e+08

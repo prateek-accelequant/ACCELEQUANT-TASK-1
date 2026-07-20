@@ -56,3 +56,12 @@ XGB_PARAM_GRID = {
     'n_jobs': [-1],
     'device': ['cuda']
 }
+
+# central_ablation_config.py
+ABLATION_SWEEP = {
+    'feature_maps': ['ZZ', 'CPMap'],
+    'entanglements': ['linear', 'full'],
+    'reps_list': [1, 2],
+    'bandwidths': [0.5, 1.0, 1.5],
+    'noise_modes': [False, True]  # False = Statevector, True = Noisy Aer
+}
