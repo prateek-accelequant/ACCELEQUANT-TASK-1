@@ -1,0 +1,28 @@
+=== ABLATION STUDY SUMMARY: Positive Control (CPMap-Generated) ===
+ -> Cumulative Compute Footprint: CPU Years = 6.10e-02 | GPU Years = 2.54e-03
+
+Feature Map Entanglement  Bandwidth  Noisy Backend  Qubits  CNOT Count  Target Alignment  Spectral Variance  Condition Number  Test F1  Test AUC
+         ZZ       linear        0.5          False       8          28          0.134525           0.002533      9.561023e+02 0.910256  0.961075
+         ZZ       linear        0.5           True       8          28          0.134525           0.002533      9.561023e+02 0.910256  0.961075
+         ZZ       linear        1.0          False       8          28          0.069717           0.000390      5.905632e+01 0.890244  0.916667
+         ZZ       linear        1.0           True       8          28          0.069717           0.000390      5.905632e+01 0.890244  0.916667
+         ZZ       linear        2.0          False       8          28          0.065135           0.000350      5.784708e+01 0.779874  0.859466
+         ZZ       linear        2.0           True       8          28          0.065135           0.000350      5.784708e+01 0.779874  0.859466
+         ZZ         full        0.5          False       8         112          0.085375           0.000632      1.033485e+02 0.924051  0.978253
+         ZZ         full        0.5           True       8         112          0.085375           0.000632      1.033485e+02 0.924051  0.978253
+         ZZ         full        1.0          False       8         112          0.078099           0.000222      2.738285e+01 0.925000  0.969664
+         ZZ         full        1.0           True       8         112          0.078099           0.000222      2.738285e+01 0.925000  0.969664
+         ZZ         full        2.0          False       8         112          0.095758           0.000440      7.031121e+01 0.891720  0.936952
+         ZZ         full        2.0           True       8         112          0.095758           0.000440      7.031121e+01 0.891720  0.936952
+      CPMap       linear        0.5          False       5          42          0.008700           0.012047      1.657172e+12 0.887324  0.986111
+      CPMap       linear        0.5           True       5          42          0.008700           0.012047      1.657172e+12 0.887324  0.986111
+      CPMap       linear        1.0          False       5          42          0.064824           0.043086      8.444733e+08 0.974026  0.995614
+      CPMap       linear        1.0           True       5          42          0.064824           0.043086      8.444733e+08 0.974026  0.995614
+      CPMap       linear        2.0          False       5          42          0.186182           0.014098      2.797141e+05 0.894737  0.962354
+      CPMap       linear        2.0           True       5          42          0.186182           0.014098      2.797141e+05 0.894737  0.962354
+      CPMap         full        0.5          False       5          42          0.008700           0.012047      1.657172e+12 0.887324  0.986111
+      CPMap         full        0.5           True       5          42          0.008700           0.012047      1.657172e+12 0.887324  0.986111
+      CPMap         full        1.0          False       5          42          0.064824           0.043086      8.444733e+08 0.974026  0.995614
+      CPMap         full        1.0           True       5          42          0.064824           0.043086      8.444733e+08 0.974026  0.995614
+      CPMap         full        2.0          False       5          42          0.186182           0.014098      2.797141e+05 0.894737  0.962354
+      CPMap         full        2.0           True       5          42          0.186182           0.014098      2.797141e+05 0.894737  0.962354
