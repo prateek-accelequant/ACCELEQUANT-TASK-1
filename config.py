@@ -1,7 +1,19 @@
 """
 Module: config.py
-Description: Central parameters defining execution flags and shared experimental constraints.
+Description: Central parameters defining execution flags, shared experimental constraints,
+             and global cache directory routing.
 """
+import os
+
+# --- CENTRAL CACHE ROUTING ---
+CACHE_DIR_BASE = "QKE_Cache"
+CACHE_DIR_DATASETS = os.path.join(CACHE_DIR_BASE, "datasets")
+CACHE_DIR_KERNELS_MAIN = os.path.join(CACHE_DIR_BASE, "kernels_main")
+CACHE_DIR_KERNELS_ABLATION = os.path.join(CACHE_DIR_BASE, "kernels_ablation")
+
+for d in [CACHE_DIR_DATASETS, CACHE_DIR_KERNELS_MAIN, CACHE_DIR_KERNELS_ABLATION]:
+    os.makedirs(d, exist_ok=True)
+
 # Global Replication Control
 SEED = 42
 
@@ -15,11 +27,11 @@ RUN_MODELS = {
 }
 
 # Data Pipeline Parameters
-QUBIT_BUDGET = 8           # Maximum qubits upper bound. Data PCA targets exactly this many features.
-N_PER_CLASS_SYNTH = 400    # Synthetic dataset boundaries
-SYNTH_RADII = (1.0, 2.0)   # Concentric ring boundaries
-SYNTH_NOISE = 0.08         # Random perturbation width
-REAL_DATA_RATIO = 1.0      # Balance mapping ratio for fraud inputs
+QUBIT_BUDGET = 8           
+N_PER_CLASS_SYNTH = 400    
+SYNTH_RADII = (1.0, 2.0)   
+SYNTH_NOISE = 0.08         
+REAL_DATA_RATIO = 1.0      
 CSV_PATH = "processed_fraud_data.csv"
 
 # Positive Control Setup
@@ -27,24 +39,22 @@ N_ANCHORS = 30
 MARGIN_PERCENTAGE = 0.1
 
 # Quantum Execution Parameters
-REPS = 1                   # Strictly fixed to 1 for fair gate count comparisons
-ENTANGLEMENT = 'linear'    # ZZ Map connection topology ('linear' or 'full')
-SHOTS = 1024               # Sample iterations per circuit evaluation fixed
-USE_NISQ_NOISE = False     # Toggle between clean Aer vs Noisy Aer models
+REPS = 1                   
+ENTANGLEMENT = 'linear'    
+SHOTS = 1024               
+USE_NISQ_NOISE = False     
 
 # Experimental Sweep Strategy
-N_LIST = [50, 100, 200, 500]  # Sample budget sweep sizes
-N_SPLITS = 5               # Resampling iterations per sweep budget
-OUTER_SPLITS = 5           # Train/Test outer separation
+N_LIST = [50, 100, 200, 500]  
+N_SPLITS = 5               
+OUTER_SPLITS = 5           
 
 # Hyperparameter Search Grids
-# Used for Classical RBF-SVC
 SVC_PARAM_GRID = {
     'C': [0.1, 1, 10, 100],
     'gamma': ['scale', 'auto', 0.01, 0.1]
 }
 
-# Used for Quantum Precomputed SVC (gamma doesn't apply to precomputed kernels)
 QSVC_PARAM_GRID = {
     'C': [0.1, 1, 10, 100]
 }
@@ -54,14 +64,5 @@ XGB_PARAM_GRID = {
     'learning_rate': [0.05, 0.1],
     'n_estimators': [50, 100],
     'n_jobs': [-1],
-    'device': ['cuda']
-}
-
-# central_ablation_config.py
-ABLATION_SWEEP = {
-    'feature_maps': ['ZZ', 'CPMap'],
-    'entanglements': ['linear', 'full'],
-    'reps_list': [1, 2],
-    'bandwidths': [0.5, 1.0, 1.5],
-    'noise_modes': [False, True]  # False = Statevector, True = Noisy Aer
+    'device': ['cuda'] # Update to 'cpu' if running on a non-CUDA instance
 }

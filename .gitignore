@@ -3,3 +3,4 @@ __pycache__
 *.csv
 .DS_Store
 Miniconda3-latest-Linux-x86_64.shMiniconda3-latest-Linux-x86_64.sh
+!/results/ablation_report_Primary_Synthetic__Shells_.csv
