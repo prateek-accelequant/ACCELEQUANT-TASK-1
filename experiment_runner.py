@@ -174,7 +174,7 @@ def run_sample_efficiency_suite(X_all, y_all, dataset_name, is_real_data=False, 
 
 
 def run_single_ablation(fmap_type, ent, bw, use_noise, X_train_p, X_test_p, y_train, y_test, ds_name, chunk_sz):
-    """Isolated memory-protected worker process for structural ablations with anti-contention locks."""
+    """Isolated memory-protected worker process for structural ablations with dimension-validated caching."""
     # Force underlying linear algebra libraries in subprocesses to single-thread 
     # so Joblib processes can cleanly distribute across multiple CPU cores without locking.
     os.environ['OMP_NUM_THREADS'] = '1'
@@ -192,10 +192,15 @@ def run_single_ablation(fmap_type, ent, bw, use_noise, X_train_p, X_test_p, y_tr
     X_train_scaled, X_test_scaled = X_train_p * bw, X_test_p * bw
     mgr = ProductionQuantumKernelManager(map_type=fmap_type, use_noise=use_noise)
     
+    # Check cache existence and validate matrix dimensions against current y_train / y_test
+    cache_valid = False
     if os.path.exists(train_cache) and os.path.exists(test_cache):
         K_train = np.load(train_cache)
         K_test = np.load(test_cache)
-    else:
+        if K_train.shape[0] == len(y_train) and K_test.shape[0] == len(y_test) and K_test.shape[1] == len(y_train):
+            cache_valid = True
+
+    if not cache_valid:
         K_train = utils.evaluate_kernel_in_chunks(mgr.kernel, X1=X_train_scaled, chunk_size=chunk_sz)
         K_test = utils.evaluate_kernel_in_chunks(mgr.kernel, X1=X_test_scaled, X2=X_train_scaled, chunk_size=chunk_sz)
         np.save(train_cache, K_train)
