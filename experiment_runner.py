@@ -174,14 +174,18 @@ def run_sample_efficiency_suite(X_all, y_all, dataset_name, is_real_data=False, 
 
 
 def run_single_ablation(fmap_type, ent, bw, use_noise, X_train_p, X_test_p, y_train, y_test, ds_name, chunk_sz):
-    """Isolated memory-protected worker process for structural ablations."""
+    """Isolated memory-protected worker process for structural ablations with anti-contention locks."""
+    # Force underlying linear algebra libraries in subprocesses to single-thread 
+    # so Joblib processes can cleanly distribute across multiple CPU cores without locking.
+    os.environ['OMP_NUM_THREADS'] = '1'
+    os.environ['MKL_NUM_THREADS'] = '1'
+    os.environ['OPENBLAS_NUM_THREADS'] = '1'
+    
     algorithm_globals.num_workers = 1
     config.ENTANGLEMENT = ent
     config.USE_NISQ_NOISE = use_noise
     
-    # Route directly into a granular sub-folder based on its specific ablation parameters
     cache_dir = utils.get_cache_dir(ds_name, "kernels_ablation", ablation_params=(fmap_type, ent, bw, use_noise))
-    
     train_cache = os.path.join(cache_dir, "train_kernel.npy")
     test_cache = os.path.join(cache_dir, "test_kernel.npy")
     
@@ -224,10 +228,15 @@ def run_ablation_matrix_suite(X_all, y_all, dataset_name, is_real_data=False, n_
     skf_outer = StratifiedKFold(n_splits=config.OUTER_SPLITS, shuffle=True, random_state=config.SEED)
     train_idx, test_idx = next(skf_outer.split(X_all, y_all))
     
+    # --- STRICT TRAINING SAMPLE LIMITER (Max 500 samples) ---
+    max_train_pool = min(500, len(train_idx))
+    max_test_pool = min(250, len(test_idx))
+    train_idx = train_idx[:max_train_pool]
+    test_idx = test_idx[:max_test_pool]
+    print(f"   [Ablation Pool Limiter] Bounded training pool to exactly {len(train_idx)} samples.")
+
     chunk_sz = 200
     if is_real_data:
-        train_idx = train_idx[:min(1000, len(train_idx))]
-        test_idx = test_idx[:min(500, len(test_idx))]
         chunk_sz = 50
 
     X_train_p, X_test_p = X_all[train_idx], X_all[test_idx]
@@ -242,9 +251,14 @@ def run_ablation_matrix_suite(X_all, y_all, dataset_name, is_real_data=False, n_
         for noise in [False, True]
         if not (fmap == 'CPMap' and ent == 'full')
     ]
+    
+    # Enforce maximum 12 core global limit safely
     effective_cores = min(n_cores, 12)
-    print(f"\n[Ablation Suite] Launching parallel architectural matrix for '{dataset_name}'...")
-    ablation_records = Parallel(n_jobs=effective_cores, verbose=5, batch_size=2)(
+    
+    print(f"\n[Ablation Suite] Launching parallel architectural matrix for '{dataset_name}' using {effective_cores} cores...")
+    
+    # Restored explicit batch_size=2 alongside loky backend for balanced parallel scheduling
+    ablation_records = Parallel(n_jobs=effective_cores, backend='loky', batch_size=2, verbose=5)(
         delayed(run_single_ablation)(*task, X_train_p, X_test_p, y_train, y_test, dataset_name, chunk_sz) for task in tasks
     )
     
