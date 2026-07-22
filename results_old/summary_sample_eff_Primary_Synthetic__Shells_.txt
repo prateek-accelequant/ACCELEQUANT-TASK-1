@@ -2,8 +2,10 @@
 ==================================================================
 SAMPLE-EFFICIENCY METRICS REPORT FOR: Primary Synthetic (Shells)
 ==================================================================
-[Compute Footprint Tracker]
- -> Cumulative CPU Computing Years: 9.86e-05 years
+[Persistent Compute Footprint Tracker]
+ -> Cumulative Active Wall-Clock Time: 51724.37 seconds
+ -> Cumulative CPU Computing Years: 3.93e-02 years
+ -> Cumulative GPU Computing Years: 1.64e-03 years
 
 >> Model Family: RBF-SVC
    N= 50 | F1: 1.0000 ± 0.0000 | AUC: 1.0000 ± 0.0000

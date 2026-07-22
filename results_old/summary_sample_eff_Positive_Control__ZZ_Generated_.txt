@@ -2,8 +2,10 @@
 ==================================================================
 SAMPLE-EFFICIENCY METRICS REPORT FOR: Positive Control (ZZ-Generated)
 ==================================================================
-[Compute Footprint Tracker]
- -> Cumulative CPU Computing Years: 3.25e-04 years
+[Persistent Compute Footprint Tracker]
+ -> Cumulative Active Wall-Clock Time: 51565.05 seconds
+ -> Cumulative CPU Computing Years: 3.92e-02 years
+ -> Cumulative GPU Computing Years: 1.63e-03 years
 
 >> Model Family: RBF-SVC
    N= 50 | F1: 0.5942 ± 0.0726 | AUC: 0.4892 ± 0.1404
@@ -13,8 +15,8 @@ SAMPLE-EFFICIENCY METRICS REPORT FOR: Positive Control (ZZ-Generated)
 >> Model Family: From-Scratch SVM
    N= 50 | F1: 0.5970 ± 0.0719 | AUC: 0.5956 ± 0.0632
    N=100 | F1: 0.6651 ± 0.0295 | AUC: 0.6469 ± 0.0786
-   N=200 | F1: 0.6319 ± 0.0536 | AUC: 0.6824 ± 0.0490
-   N=500 | F1: 0.6801 ± 0.0330 | AUC: 0.6906 ± 0.0599
+   N=200 | F1: 0.6319 ± 0.0536 | AUC: 0.6825 ± 0.0488
+   N=500 | F1: 0.6801 ± 0.0330 | AUC: 0.6905 ± 0.0601
 >> Model Family: XGBoost
    N= 50 | F1: 0.5588 ± 0.0912 | AUC: 0.6053 ± 0.0818
    N=100 | F1: 0.6074 ± 0.0471 | AUC: 0.6147 ± 0.0610

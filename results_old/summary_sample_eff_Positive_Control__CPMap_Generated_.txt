@@ -2,8 +2,10 @@
 ==================================================================
 SAMPLE-EFFICIENCY METRICS REPORT FOR: Positive Control (CPMap-Generated)
 ==================================================================
-[Compute Footprint Tracker]
- -> Cumulative CPU Computing Years: 5.31e-04 years
+[Persistent Compute Footprint Tracker]
+ -> Cumulative Active Wall-Clock Time: 60415.18 seconds
+ -> Cumulative CPU Computing Years: 4.59e-02 years
+ -> Cumulative GPU Computing Years: 1.91e-03 years
 
 >> Model Family: RBF-SVC
    N= 50 | F1: 0.8517 ± 0.0589 | AUC: 0.9546 ± 0.0114
@@ -13,7 +15,7 @@ SAMPLE-EFFICIENCY METRICS REPORT FOR: Positive Control (CPMap-Generated)
 >> Model Family: From-Scratch SVM
    N= 50 | F1: 0.8517 ± 0.0589 | AUC: 0.9546 ± 0.0113
    N=100 | F1: 0.9037 ± 0.0384 | AUC: 0.9742 ± 0.0100
-   N=200 | F1: 0.9228 ± 0.0495 | AUC: 0.9821 ± 0.0143
+   N=200 | F1: 0.9228 ± 0.0495 | AUC: 0.9822 ± 0.0142
    N=500 | F1: 0.9725 ± 0.0119 | AUC: 0.9964 ± 0.0034
 >> Model Family: XGBoost
    N= 50 | F1: 0.6785 ± 0.0580 | AUC: 0.7978 ± 0.0699

@@ -1,5 +1,5 @@
 === ABLATION STUDY SUMMARY: Positive Control (ZZ-Generated) ===
- -> Cumulative Compute Footprint: CPU Years = 3.46e-04
+ -> Cumulative Compute Footprint: CPU Years = 4.58e-02 | GPU Years = 1.91e-03
 
 Feature Map Entanglement  Bandwidth  Noisy Backend  Qubits  CNOT Count  Target Alignment  Spectral Variance  Condition Number  Test F1  Test AUC
          ZZ       linear        0.5          False       8          28          0.107753           0.003477      3.297135e+02 0.693069  0.843433
