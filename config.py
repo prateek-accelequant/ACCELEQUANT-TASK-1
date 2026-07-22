@@ -7,17 +7,14 @@ import os
 
 # --- CENTRAL CACHE ROUTING ---
 CACHE_DIR_BASE = "QKE_Cache"
-CACHE_DIR_DATASETS = os.path.join(CACHE_DIR_BASE, "datasets")
-CACHE_DIR_KERNELS_MAIN = os.path.join(CACHE_DIR_BASE, "kernels_main")
-CACHE_DIR_KERNELS_ABLATION = os.path.join(CACHE_DIR_BASE, "kernels_ablation")
-
-for d in [CACHE_DIR_DATASETS, CACHE_DIR_KERNELS_MAIN, CACHE_DIR_KERNELS_ABLATION]:
-    os.makedirs(d, exist_ok=True)
+CACHE_DIR_DATASETS = os.path.join(CACHE_DIR_BASE, "_datasets")
+os.makedirs(CACHE_DIR_DATASETS, exist_ok=True)
 
 # Global Replication Control
 SEED = 42
 
 # Model Execution Selector Switches (True = Evaluate, False = Skip)
+# Toggle these to run ONLY the model you are currently debugging!
 RUN_MODELS = {
     'RBF-SVC': True,
     'From-Scratch SVM': True,
@@ -51,18 +48,16 @@ OUTER_SPLITS = 5
 
 # Hyperparameter Search Grids
 SVC_PARAM_GRID = {
-    'C': [0.1, 1, 10, 100],
+    'C': [0.1, 1, 10, 100], 
     'gamma': ['scale', 'auto', 0.01, 0.1]
-}
-
+    }
 QSVC_PARAM_GRID = {
     'C': [0.1, 1, 10, 100]
-}
-
+    }
 XGB_PARAM_GRID = {
-    'max_depth': [3, 5],
-    'learning_rate': [0.05, 0.1],
-    'n_estimators': [50, 100],
-    'n_jobs': [-1],
-    'device': ['cuda'] # Update to 'cpu' if running on a non-CUDA instance
-}
+    'max_depth': [3, 5], 
+    'learning_rate': [0.05, 0.1], 
+    'n_estimators': [50, 100], 
+    'n_jobs': [-1], 
+    'device': ['cpu']
+    }

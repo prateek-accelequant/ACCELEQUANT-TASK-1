@@ -167,33 +167,38 @@ class ProductionQuantumKernelManager:
             for r in range(config.REPS):
                 active_qubits = list(range(self.num_qubits))
                 feature_idx = 0
-                is_layer_zero = True
                 
                 while len(active_qubits) >= 2 and feature_idx < self.num_features:
                     n_active = len(active_qubits)
+                    
+                    # 1. Feature Encoding
                     for q in active_qubits:
                         if feature_idx < self.num_features:
                             circuit.h(q)
                             circuit.rz(x[feature_idx], q)
                             feature_idx += 1
                         
+                    # 2. C-Gates on Even Pairs
                     for i in range(0, n_active - 1, 2):
                         circuit.append(c_gate, [active_qubits[i], active_qubits[i+1]])
                     
-                    if is_layer_zero:
-                        for i in range(1, n_active - 1, 2):
-                            circuit.append(c_gate, [active_qubits[i], active_qubits[i+1]])
-                        is_layer_zero = False
+                    # 3. C-Gates on Odd Pairs (Staggered Entanglement across ALL layers)
+                    for i in range(1, n_active - 1, 2):
+                        circuit.append(c_gate, [active_qubits[i], active_qubits[i+1]])
                         
+                    # 4. P-Gates (Pooling) on Even Pairs
                     next_layer_qubits = []
                     for i in range(0, n_active - 1, 2):
                         circuit.append(p_gate, [active_qubits[i], active_qubits[i+1]])
                         next_layer_qubits.append(active_qubits[i])
                         
+                    # Carry forward the last unpaired qubit if n_active is odd
                     if n_active % 2 != 0:
                         next_layer_qubits.append(active_qubits[-1])
+                        
                     active_qubits = next_layer_qubits
                 
+                # Encode remaining feature if exactly 1 qubit is left
                 if len(active_qubits) == 1 and feature_idx < self.num_features:
                     circuit.h(active_qubits[0])
                     circuit.rz(x[feature_idx], active_qubits[0])
