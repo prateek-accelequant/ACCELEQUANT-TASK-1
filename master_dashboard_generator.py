@@ -19,8 +19,6 @@ from scipy import stats
 from sklearn.svm import SVC
 from sklearn.metrics import f1_score, accuracy_score, roc_auc_score
 from sklearn.model_selection import StratifiedKFold
-from sklearn.decomposition import PCA
-import xgboost as xgb
 from qiskit.circuit.library import ZZFeatureMap
 from tqdm import tqdm
 
@@ -209,7 +207,76 @@ def generate_resource_table():
 
 
 # =====================================================================
-# 2. DATASET LOADER WITH ROBUST FILENAME MAPPING
+# 2. DEDICATED CIRCUIT EVALUATIONS SCALING PLOT & CSV
+# =====================================================================
+def plot_circuit_evaluations_vs_N(max_n=500, n_test=200, step=10):
+    print("\n[*] Generating Circuit Evaluations vs. Training Samples (N) Analysis...")
+
+    n_train_vec = np.arange(10, max_n + 1, step)
+    train_gram_circuits = (n_train_vec * (n_train_vec - 1)) // 2
+    test_gram_circuits = n_test * n_train_vec
+    total_circuits = train_gram_circuits + test_gram_circuits
+
+    df_circuits = pd.DataFrame({
+        'N_Train_Samples': n_train_vec,
+        'N_Test_Samples': n_test,
+        'Train_Gram_Matrix_Circuits': train_gram_circuits,
+        'Test_Gram_Matrix_Circuits': test_gram_circuits,
+        'Total_Circuit_Evaluations': total_circuits
+    })
+    
+    csv_path = os.path.join(RESULTS_DIR, "circuit_evaluations_vs_N.csv")
+    df_circuits.to_csv(csv_path, index=False)
+    print(f"   [Saved] Detailed CSV Ledger -> '{csv_path}'")
+
+    fig, ax = plt.subplots(figsize=(10, 6))
+
+    ax.plot(n_train_vec, total_circuits, label=r"Total Circuit Evaluations ($N_{\mathrm{circ}}$)", 
+            color='#1f77b4', linewidth=2.8, zorder=3)
+    ax.plot(n_train_vec, train_gram_circuits, label=r"Training Gram Matrix ($\frac{N(N-1)}{2}$)", 
+            color='#9467bd', linestyle='--', linewidth=1.8, alpha=0.85)
+    ax.plot(n_train_vec, test_gram_circuits, label=r"Test Gram Matrix ($N_{\mathrm{test}} \times N$)", 
+            color='#2ca02c', linestyle=':', linewidth=1.8, alpha=0.85)
+
+    benchmark_n = [50, 100, 200, 500]
+    for n_val in benchmark_n:
+        idx = np.where(n_train_vec == n_val)[0][0]
+        tot_val = total_circuits[idx]
+        
+        ax.scatter([n_val], [tot_val], color='#d62728', s=60, zorder=5, edgecolor='black')
+        ax.annotate(
+            f"$N={n_val}$\n{tot_val:,} circ", 
+            xy=(n_val, tot_val), 
+            xytext=(-35, 18 if n_val < 500 else -35),
+            textcoords="offset points", 
+            fontsize=9,
+            fontweight='bold',
+            bbox=dict(boxstyle="round,pad=0.3", facecolor="white", edgecolor="#d62728", alpha=0.9),
+            arrowprops=dict(arrowstyle="->", color="#d62728", lw=1.2)
+        )
+
+    ax.set_title(
+        r"Quantum Kernel Circuit Evaluation Scaling $\mathcal{O}(N^2)$" + "\n" +
+        rf"(Gram Matrix Pair Evaluations for $N_{{\mathrm{{test}}}} = {n_test}$)", 
+        fontweight='bold', fontsize=13, pad=12
+    )
+    ax.set_xlabel(r"Number of Training Samples ($N$)", fontsize=11)
+    ax.set_ylabel(r"Total Circuit Evaluations ($N_{\mathrm{circ}}$)", fontsize=11)
+    
+    ax.grid(True, linestyle='--', alpha=0.5)
+    ax.legend(loc='upper left', fontsize=10, frameon=True)
+    
+    ax.get_yaxis().set_major_formatter(matplotlib.ticker.FuncFormatter(lambda x, p: f"{int(x):,}"))
+
+    plt.tight_layout()
+    plot_path = os.path.join(RESULTS_DIR, "plot_circuit_evaluations_vs_N.png")
+    plt.savefig(plot_path, dpi=300, bbox_inches='tight')
+    plt.close(fig)
+    print(f"   [Saved] Visualization Plot -> '{plot_path}'")
+
+
+# =====================================================================
+# 3. DATASET LOADER WITH ROBUST FILENAME MAPPING
 # =====================================================================
 def load_dataset_and_split(ds_name):
     file_map = {
@@ -253,7 +320,7 @@ def load_dataset_and_split(ds_name):
 
 
 # =====================================================================
-# 3. CONTINUOUS SAMPLE EFFICIENCY SWEEP & TARGET F1 SEARCH (FROM N=10)
+# 4. CONTINUOUS SAMPLE EFFICIENCY SWEEP & TARGET F1 SEARCH (FROM N=10)
 # =====================================================================
 def execute_continuous_sweep_and_plot():
     print("\n[*] Executing Fine-Grained Sample Efficiency Sweep (Target F1 Search)...")
@@ -352,8 +419,9 @@ def execute_continuous_sweep_and_plot():
             df_sweep[f'{q_map}_F1'] = q_f1s
             df_sweep[f'{q_map}_Reached_Target'] = target_reached_list
             
-            if exact_n_reached is not None:
-                quantum_intersections[q_map] = (exact_n_reached, q_f1s[fine_n_list.tolist().index(exact_n_reached)])
+            if exact_n_reached is not None and len(q_f1s) > 0:
+                idx_found = fine_n_list.tolist().index(exact_n_reached)
+                quantum_intersections[q_map] = (exact_n_reached, q_f1s[idx_found])
                 print(f"      [Target Reached] {q_map} hit classical target at N = {exact_n_reached}")
         
         # Save exact sample evolution CSV
@@ -410,7 +478,7 @@ def execute_continuous_sweep_and_plot():
 
 
 # =====================================================================
-# 4. ABLATION INSIGHT DASHBOARDS
+# 5. ABLATION INSIGHT DASHBOARDS
 # =====================================================================
 def render_ablation_dashboards():
     print("\n[*] Processing Ablation Dashboards...")
@@ -458,7 +526,7 @@ def render_ablation_dashboards():
 
 
 # =====================================================================
-# 5. SPECTRAL DIAGNOSTICS & VARIANCE
+# 6. SPECTRAL DIAGNOSTICS & VARIANCE
 # =====================================================================
 def plot_all_spectral_diagnostics():
     print("\n[*] Extracting Spectral Diagnostics and Off-Diagonal Variance...")
@@ -520,6 +588,7 @@ def plot_all_spectral_diagnostics():
 # =====================================================================
 if __name__ == "__main__":
     generate_resource_table()
+    plot_circuit_evaluations_vs_N()
     execute_continuous_sweep_and_plot()
     render_ablation_dashboards()
     plot_all_spectral_diagnostics()
