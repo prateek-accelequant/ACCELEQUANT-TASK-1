@@ -1,9 +1,15 @@
 """
 Script: master_dashboard_generator.py
-Description: Master reporting and evaluation orchestrator. Inspects live Qiskit circuit objects
-             dynamically to measure exact gate counts per overlap circuit (U^\dagger U),
-             tracks sample efficiency continuous sweeps, generates spectral diagnostic plots,
-             renders ablation dashboards, and exports comprehensive CSV ledgers.
+Description: Master reporting and evaluation orchestrator. 
+             Generates publication-ready plots for:
+               - F1 Score vs N (with 95% CI bands)
+               - ROC-AUC Score vs N (with 95% CI bands)
+               - Gram Matrix Condition Number (kappa) vs N
+               - Samples to Reach Target F1 Score (Optimal N)
+               - Hardware Resource Scaling & Circuit Evaluations
+               - Spectral Decomposition & Off-Diagonal Variance
+               - Ablation Dashboards
+             Includes Quantum-ZZ (Full) across all evaluations with robust cache mapping.
 """
 
 import os
@@ -19,14 +25,17 @@ from scipy import stats
 from sklearn.svm import SVC
 from sklearn.metrics import f1_score, accuracy_score, roc_auc_score
 from sklearn.model_selection import StratifiedKFold
+from sklearn.decomposition import PCA
+import xgboost as xgb
+
+from qiskit import transpile
 from qiskit.circuit.library import ZZFeatureMap
 from tqdm import tqdm
 
-# Enable Matplotlib mathtext for publication-grade LaTeX formatting
+# Enable Matplotlib mathtext for LaTeX formatting
 plt.rcParams['mathtext.fontset'] = 'stix'
 plt.rcParams['font.family'] = 'STIXGeneral'
 
-# Import local project modules safely
 try:
     import config
     import utils
@@ -61,15 +70,21 @@ warnings.filterwarnings('ignore')
 RESULTS_DIR = "results"
 os.makedirs(RESULTS_DIR, exist_ok=True)
 
+MODEL_COLORS = {
+    'Classical (RBF)': '#1f77b4',
+    'Quantum-ZZ (Linear)': '#9467bd',
+    'Quantum-ZZ (Full)': '#d62728',
+    'Quantum-CPMap': '#ff7f0e'
+}
+
 
 # =====================================================================
-# 1. DYNAMIC CIRCUIT INSPECTION & HARDWARE RESOURCE ENGINE
+# 1. HARDWARE RESOURCE SCALING & DYNAMIC BASIS GATE INSPECTION
 # =====================================================================
 def inspect_live_circuit_gates(map_type='CPMap', entanglement='linear', reps=1):
     """
-    Instantiates live Qiskit feature map objects, constructs the exact compute-uncompute 
-    fidelity circuit (U^\dagger U), unrolls custom blocks down to native basis gates, 
-    and reads gate counts directly from the Qiskit circuit DAG/ops dictionary.
+    Instantiates live Qiskit feature map objects and unrolls them down 
+    to fundamental basis gates ['cx', 'rz', 'ry', 'h'] via Qiskit transpile.
     """
     if map_type == 'ZZ':
         fmap = ZZFeatureMap(
@@ -83,14 +98,12 @@ def inspect_live_circuit_gates(map_type='CPMap', entanglement='linear', reps=1):
         fmap = mgr.feature_map
         qubits = mgr.num_qubits
 
-    # Fully decompose custom gates down to fundamental basis gates (cx, rz, ry, h)
-    decomposed_fmap = fmap.decompose()
-    if map_type == 'CPMap':
-        decomposed_fmap = decomposed_fmap.decompose()
-
     # Build exact compute-uncompute overlap circuit: U^\dagger(x') U(x)
-    overlap_circuit = decomposed_fmap.compose(decomposed_fmap.inverse())
-    ops = overlap_circuit.count_ops()
+    overlap_circuit = fmap.compose(fmap.inverse())
+    
+    # Transpile to native basis gates for exact 1-qubit and CNOT counting
+    unrolled_circ = transpile(overlap_circuit, basis_gates=['cx', 'rz', 'ry', 'h'], optimization_level=0)
+    ops = unrolled_circ.count_ops()
 
     cnot_count = ops.get('cx', 0)
     sq_gates = ops.get('h', 0) + ops.get('rz', 0) + ops.get('ry', 0) + ops.get('rx', 0)
@@ -104,7 +117,7 @@ def inspect_live_circuit_gates(map_type='CPMap', entanglement='linear', reps=1):
 
 
 def generate_resource_table():
-    """Generates dynamic hardware cost ledgers and a 4-panel visual dashboard."""
+    """Outputs hardware resource CSVs and a 4-panel visual dashboard."""
     print("\n[*] Dynamically inspecting live Qiskit circuit objects...")
     
     configs_to_inspect = [
@@ -127,10 +140,11 @@ def generate_resource_table():
     df_hw = pd.DataFrame(records)
     csv_path = os.path.join(RESULTS_DIR, "dynamic_circuit_gate_counts.csv")
     df_hw.to_csv(csv_path, index=False)
-    print("\n--- DYNAMICALLY EXTRACTED GATE COUNTS (PER OVERLAP CIRCUIT U^\dagger U) ---")
+    
+    # Raw string added to fix escape sequence warning
+    print(r"\n--- DYNAMICALLY EXTRACTED GATE COUNTS (PER OVERLAP CIRCUIT U^\dagger U) ---")
     print(df_hw.to_string(index=False))
     
-    # Calculate resource scaling across N
     max_n = max(config.N_LIST)
     n_sweep = np.arange(10, max_n + 1, 10)
     n_test = 200
@@ -152,34 +166,34 @@ def generate_resource_table():
     df_scaling = pd.DataFrame(scaling_rows)
     df_scaling.to_csv(os.path.join(RESULTS_DIR, "resource_scaling_by_N.csv"), index=False)
     
-    # Render 4-Panel Resource Visual Dashboard
     fig, axes = plt.subplots(2, 2, figsize=(15, 11))
-    colors = {'Quantum-ZZ (Linear)': '#9467bd', 'Quantum-ZZ (Full)': '#d62728', 'Quantum-CPMap': '#ff7f0e'}
     
     # Panel 1: Circuit Pair Evaluations
     ax1 = axes[0, 0]
     sub_c = df_scaling[df_scaling['Configuration'] == 'Quantum-CPMap']
     ax1.plot(sub_c['N_Train_Samples'], sub_c['Pair_Circuits_Evaluated'], color='#333333', linewidth=2.5)
-    ax1.set_title(r"Gram Matrix Circuit Scaling ($O(N^2)$ Pair Evaluations)", fontweight='bold', fontsize=12)
+    ax1.set_title(r"Gram Matrix Circuit Scaling ($\mathcal{O}(N^2)$ Pair Evaluations)", fontweight='bold', fontsize=12)
     ax1.set_xlabel(r"Training Sample Size ($N$)")
     ax1.set_ylabel(r"Total Overlap Circuits ($N_{\mathrm{circ}}$)")
     ax1.grid(True, linestyle='--', alpha=0.5)
 
     # Panel 2: Cumulative CNOT Scaling
     ax2 = axes[0, 1]
-    for label in colors:
+    for label in MODEL_COLORS:
+        if label == 'Classical (RBF)': continue
         sub = df_scaling[df_scaling['Configuration'] == label]
-        ax2.plot(sub['N_Train_Samples'], sub['Cumulative_CNOT_Operations'], label=label, color=colors[label], linewidth=2.2)
+        if not sub.empty:
+            ax2.plot(sub['N_Train_Samples'], sub['Cumulative_CNOT_Operations'], label=label, color=MODEL_COLORS[label], linewidth=2.2)
     ax2.set_title(r"Cumulative CNOT Operations to Convergence", fontweight='bold', fontsize=12)
     ax2.set_xlabel(r"Training Sample Size ($N$)")
-    ax2.set_ylabel(r"Cumulative CNOT Count ($N_{\mathrm{CNOT}}$)")
+    ax2.set_ylabel(r"Cumulative CNOT Count")
     ax2.legend(loc='upper left', fontsize=9)
     ax2.grid(True, linestyle='--', alpha=0.5)
 
     # Panel 3: Per-Circuit CNOT Overhead
     ax3 = axes[1, 0]
     bars = ax3.bar(df_hw['Configuration'], df_hw['CNOTs / Overlap Circuit (U^dagger U)'], 
-                   color=[colors.get(c, '#333') for c in df_hw['Configuration']], alpha=0.85, width=0.4, edgecolor='black')
+                   color=[MODEL_COLORS.get(c, '#333') for c in df_hw['Configuration']], alpha=0.85, width=0.4, edgecolor='black')
     for bar in bars:
         yval = bar.get_height()
         ax3.text(bar.get_x() + bar.get_width()/2, yval + 1, f"{int(yval)} CNOTs", ha='center', va='bottom', fontweight='bold')
@@ -190,9 +204,11 @@ def generate_resource_table():
 
     # Panel 4: Cumulative Total Operations
     ax4 = axes[1, 1]
-    for label in colors:
+    for label in MODEL_COLORS:
+        if label == 'Classical (RBF)': continue
         sub = df_scaling[df_scaling['Configuration'] == label]
-        ax4.plot(sub['N_Train_Samples'], sub['Cumulative_Total_Operations'], label=label, color=colors[label], linewidth=2.2)
+        if not sub.empty:
+            ax4.plot(sub['N_Train_Samples'], sub['Cumulative_Total_Operations'], label=label, color=MODEL_COLORS[label], linewidth=2.2)
     ax4.set_title(r"Total Quantum Operations (1-Qubit + CNOTs)", fontweight='bold', fontsize=12)
     ax4.set_xlabel(r"Training Sample Size ($N$)")
     ax4.set_ylabel(r"Total Operations Count")
@@ -203,14 +219,12 @@ def generate_resource_table():
     plot_path = os.path.join(RESULTS_DIR, "plot_resource_scaling_dashboard.png")
     plt.savefig(plot_path, dpi=300, bbox_inches='tight')
     plt.close(fig)
-    print(f"   [Saved] Verified Hardware Resource Dashboard -> '{plot_path}'")
+    print(f"   [Saved] Hardware Resource Dashboard -> '{plot_path}'")
 
 
-# =====================================================================
-# 2. DEDICATED CIRCUIT EVALUATIONS SCALING PLOT & CSV
-# =====================================================================
 def plot_circuit_evaluations_vs_N(max_n=500, n_test=200, step=10):
-    print("\n[*] Generating Circuit Evaluations vs. Training Samples (N) Analysis...")
+    """Generates dedicated O(N^2) circuit evaluations plot."""
+    print("\n[*] Generating Circuit Evaluations vs. Training Samples (N) Plot...")
 
     n_train_vec = np.arange(10, max_n + 1, step)
     train_gram_circuits = (n_train_vec * (n_train_vec - 1)) // 2
@@ -227,7 +241,6 @@ def plot_circuit_evaluations_vs_N(max_n=500, n_test=200, step=10):
     
     csv_path = os.path.join(RESULTS_DIR, "circuit_evaluations_vs_N.csv")
     df_circuits.to_csv(csv_path, index=False)
-    print(f"   [Saved] Detailed CSV Ledger -> '{csv_path}'")
 
     fig, ax = plt.subplots(figsize=(10, 6))
 
@@ -265,40 +278,53 @@ def plot_circuit_evaluations_vs_N(max_n=500, n_test=200, step=10):
     
     ax.grid(True, linestyle='--', alpha=0.5)
     ax.legend(loc='upper left', fontsize=10, frameon=True)
-    
     ax.get_yaxis().set_major_formatter(matplotlib.ticker.FuncFormatter(lambda x, p: f"{int(x):,}"))
 
     plt.tight_layout()
     plot_path = os.path.join(RESULTS_DIR, "plot_circuit_evaluations_vs_N.png")
     plt.savefig(plot_path, dpi=300, bbox_inches='tight')
     plt.close(fig)
-    print(f"   [Saved] Visualization Plot -> '{plot_path}'")
+    print(f"   [Saved] Circuit Evaluations Plot -> '{plot_path}'")
 
 
 # =====================================================================
-# 3. DATASET LOADER WITH ROBUST FILENAME MAPPING
+# 2. DATASET LOADER & FLEXIBLE FILE MAPPING
+# =====================================================================
+# =====================================================================
+# 2. DATASET LOADER & FLEXIBLE FILE MAPPING (Fixed Index Capping)
 # =====================================================================
 def load_dataset_and_split(ds_name):
-    file_map = {
-        "Primary_Synthetic": "Primary_Synthetic_Shells",
-        "Positive_Control__ZZ": "Positive_Control_ZZ_Generated",
-        "Positive_Control__CPMap": "Positive_Control_CPMap_Generated",
-        "Rebalanced_Real": "Rebalanced_Real_Data"
-    }
-    
-    target_file = None
-    for key, val in file_map.items():
-        if key in ds_name or val in ds_name:
-            files = os.listdir(config.CACHE_DIR_DATASETS)
-            for f in files:
-                if val in f or key in f:
-                    target_file = os.path.join(config.CACHE_DIR_DATASETS, f)
-                    break
-            break
-            
-    if not target_file:
+    """
+    Robust loader supporting both old and new dataset file naming formats.
+    Caps training indices to max 500 samples to match cached Gram matrix sizes.
+    """
+    if not os.path.exists(config.CACHE_DIR_DATASETS):
+        print(f"   [Notice] Datasets directory '{config.CACHE_DIR_DATASETS}' does not exist.")
         return None, None, None, None
-        
+
+    all_files = os.listdir(config.CACHE_DIR_DATASETS)
+    target_file = None
+
+    # Flexible keyword lookup
+    keywords = []
+    if "Primary" in ds_name or "Shells" in ds_name or "Synthetic" in ds_name:
+        keywords = ["synthetic", "shells", "Primary"]
+    elif "ZZ" in ds_name:
+        keywords = ["qnative_ZZ", "ZZ_Generated", "ZZ"]
+    elif "CPMap" in ds_name:
+        keywords = ["qnative_CPMap", "CPMap_Generated", "CPMap"]
+    elif "Real" in ds_name or "Fraud" in ds_name or "balanced" in ds_name:
+        keywords = ["balanced", "Real", "fraud"]
+
+    for f in all_files:
+        if any(kw in f for kw in keywords):
+            target_file = os.path.join(config.CACHE_DIR_DATASETS, f)
+            break
+
+    if not target_file:
+        print(f"   [Notice] No raw dataset file found matching '{ds_name}' in '{config.CACHE_DIR_DATASETS}'.")
+        return None, None, None, None
+
     if target_file.endswith(".npz"):
         data = np.load(target_file)
         X_all, y_all = data['X'], data['y']
@@ -307,149 +333,259 @@ def load_dataset_and_split(ds_name):
         y_all = df.iloc[:, 0].to_numpy()
         X_all = df.iloc[:, 1:].to_numpy()
     else:
+        print(f"   [Notice] File '{target_file}' is neither .npz nor .csv.")
         return None, None, None, None
 
     skf_outer = StratifiedKFold(n_splits=config.OUTER_SPLITS, shuffle=True, random_state=config.SEED)
     train_idx, test_idx = next(skf_outer.split(X_all, y_all))
     
-    if "Real" in ds_name or "Fraud" in ds_name or "Rebalanced" in target_file:
-        train_idx = train_idx[:min(1000, len(train_idx))]
-        test_idx = test_idx[:min(500, len(test_idx))]
+    # Bound training pool to 500 samples (or 1000 for Real data) to align with K_train_master shape
+    max_train_samples = 1000 if ("Real" in ds_name or "Fraud" in ds_name or "balanced" in target_file) else 500
+    max_test_samples = 500 if ("Real" in ds_name or "Fraud" in ds_name or "balanced" in target_file) else 250
+
+    train_idx = train_idx[:min(max_train_samples, len(train_idx))]
+    test_idx = test_idx[:min(max_test_samples, len(test_idx))]
         
     return X_all[train_idx], X_all[test_idx], y_all[train_idx], y_all[test_idx]
 
 
 # =====================================================================
-# 4. CONTINUOUS SAMPLE EFFICIENCY SWEEP & TARGET F1 SEARCH (FROM N=10)
+# 3. SAMPLE EFFICIENCY, ROC-AUC, CONDITION NUMBER & TARGET F1 SWEEP
 # =====================================================================
-def execute_continuous_sweep_and_plot():
-    print("\n[*] Executing Fine-Grained Sample Efficiency Sweep (Target F1 Search)...")
+def execute_continuous_sweep_and_all_plots():
+    print("\n[*] Executing Continuous Sample Efficiency Sweep (F1, ROC-AUC, Condition Number)...")
     
+    if not os.path.exists(config.CACHE_DIR_BASE):
+        print(f"   [Notice] Base cache dir '{config.CACHE_DIR_BASE}' does not exist.")
+        return
+
     dataset_dirs = glob.glob(os.path.join(config.CACHE_DIR_BASE, "*"))
     step = 10
     max_n = max(config.N_LIST)
     fine_n_list = np.arange(10, max_n + 1, step) 
     rng = np.random.default_rng(config.SEED)
     
+    quantum_model_keys = ['Quantum-ZZ (Linear)', 'Quantum-ZZ (Full)', 'Quantum-CPMap']
+
     for ds_dir in dataset_dirs:
         if not os.path.isdir(ds_dir) or os.path.basename(ds_dir) == "_datasets":
             continue
             
         ds_name = os.path.basename(ds_dir)
+        print(f"\n   -> Processing Dataset Cache Folder: '{ds_name}'")
+        
         X_train_full, X_test, y_train_full, y_test = load_dataset_and_split(ds_name)
         if y_train_full is None:
             continue
             
+        f1_data, f1_ci_data = {}, {}
+        auc_data, auc_ci_data = {}, {}
+        cond_num_data = {}
+        quantum_intersections = {}
+        
+        df_sweep = pd.DataFrame({'N_Samples': fine_n_list})
+
+        # -------------------------------------------------------------
+        # A. Classical Baseline Evaluation
+        # -------------------------------------------------------------
         pos_idx = np.where(y_train_full == 1)[0]
         neg_idx = np.where(y_train_full == 0)[0]
+
+        clf_f1s, clf_f1_cis = [], []
+        clf_aucs, clf_auc_cis = [], []
         
-        models_to_plot = {}
-        quantum_intersections = {}
-        df_sweep = pd.DataFrame({'N_Samples': fine_n_list})
-        
-        # 1. Classical Baseline Continuous Sweep
-        clf_f1s = []
-        for n in tqdm(fine_n_list, desc=f"RBF-SVC ({ds_name[:15]})", leave=False):
+        for n in tqdm(fine_n_list, desc=f"   Sweeping Classical RBF", leave=False):
             n_pos = min(n // 2, len(pos_idx))
             n_neg = min(n - n_pos, len(neg_idx))
             if n_pos == 0 or n_neg == 0:
-                clf_f1s.append(0.0)
+                clf_f1s.append(0.0); clf_f1_cis.append(0.0)
+                clf_aucs.append(0.5); clf_auc_cis.append(0.0)
                 continue
                 
-            splits = []
+            splits_f1, splits_auc = [], []
             for _ in range(3):
                 sub_idx = rng.permutation(np.concatenate([
                     rng.choice(pos_idx, size=n_pos, replace=False),
                     rng.choice(neg_idx, size=n_neg, replace=False)
                 ]))
-                clf = SVC(kernel='rbf', C=1.0).fit(X_train_full[sub_idx], y_train_full[sub_idx])
-                splits.append(f1_score(y_test, clf.predict(X_test)))
-            clf_f1s.append(np.mean(splits))
-            
-        models_to_plot['Classical (RBF)'] = clf_f1s
-        df_sweep['Classical_RBF_F1'] = clf_f1s
-        
-        # METHODOLOGY TARGET: Classical performance at full convergence (N = 500)
-        classical_converged_f1 = clf_f1s[-1]
-        target_threshold = classical_converged_f1
-        df_sweep['Classical_Target_F1_At_N500'] = target_threshold
-        
-        # 2. Quantum Baselines Continuous Sweep via Precomputed Matrices
-        for q_map in ['Quantum-ZZ', 'Quantum-CPMap']:
-            train_k_path = os.path.join(ds_dir, "main", f"cache_{q_map}_seed{config.SEED}_train.npy")
-            test_k_path = os.path.join(ds_dir, "main", f"cache_{q_map}_seed{config.SEED}_test.npy")
-            
-            if not (os.path.exists(train_k_path) and os.path.exists(test_k_path)):
-                continue
+                clf = SVC(kernel='rbf', C=1.0, probability=True).fit(X_train_full[sub_idx], y_train_full[sub_idx])
                 
-            K_train_master = np.load(train_k_path)
-            K_test_master = np.load(test_k_path)
+                splits_f1.append(f1_score(y_test, clf.predict(X_test)))
+                splits_auc.append(roc_auc_score(y_test, clf.predict_proba(X_test)[:, 1]))
+                
+            m_f1, ci_f1 = utils.calculate_95_ci(splits_f1)
+            m_auc, ci_auc = utils.calculate_95_ci(splits_auc)
+            clf_f1s.append(m_f1); clf_f1_cis.append(ci_f1)
+            clf_aucs.append(m_auc); clf_auc_cis.append(ci_auc)
             
-            q_f1s = []
+        f1_data['Classical (RBF)'] = clf_f1s; f1_ci_data['Classical (RBF)'] = clf_f1_cis
+        auc_data['Classical (RBF)'] = clf_aucs; auc_ci_data['Classical (RBF)'] = clf_auc_cis
+        
+        df_sweep['Classical_RBF_F1'] = clf_f1s
+        df_sweep['Classical_RBF_ROC_AUC'] = clf_aucs
+        
+        classical_target_f1 = clf_f1s[-1]
+        df_sweep['Classical_Target_F1_N500'] = classical_target_f1
+
+        # -------------------------------------------------------------
+        # B. Quantum Models Evaluation (Including ZZ Full)
+        # -------------------------------------------------------------
+        for q_key in quantum_model_keys:
+            K_train_master, K_test_master = locate_kernel_matrices(ds_dir, q_key)
+            if K_train_master is None:
+                continue
+
+            # Ensure y_train_full matches the exact matrix dimension of K_train_master
+            n_matrix = K_train_master.shape[0]
+            y_tr_bounded = y_train_full[:n_matrix]
+            
+            pos_idx_q = np.where(y_tr_bounded == 1)[0]
+            neg_idx_q = np.where(y_tr_bounded == 0)[0]
+                
+            q_f1s, q_f1_cis = [], []
+            q_aucs, q_auc_cis = [], []
+            q_conds = []
+            
             exact_n_reached = None
             target_reached_list = []
-            
-            for n in tqdm(fine_n_list, desc=f"{q_map} ({ds_name[:15]})", leave=False):
-                n_pos = min(n // 2, len(pos_idx))
-                n_neg = min(n - n_pos, len(neg_idx))
+
+            for n in tqdm(fine_n_list, desc=f"   Sweeping {q_key[:20]}", leave=False):
+                n_pos = min(n // 2, len(pos_idx_q))
+                n_neg = min(n - n_pos, len(neg_idx_q))
                 if n_pos == 0 or n_neg == 0:
-                    q_f1s.append(0.0)
+                    q_f1s.append(0.0); q_f1_cis.append(0.0)
+                    q_aucs.append(0.5); q_auc_cis.append(0.0)
+                    q_conds.append(1.0)
                     target_reached_list.append(False)
                     continue
-                    
-                splits = []
+
+                splits_f1, splits_auc = [], []
                 for _ in range(3):
                     sub_idx = rng.permutation(np.concatenate([
-                        rng.choice(pos_idx, size=n_pos, replace=False),
-                        rng.choice(neg_idx, size=n_neg, replace=False)
+                        rng.choice(pos_idx_q, size=n_pos, replace=False),
+                        rng.choice(neg_idx_q, size=n_neg, replace=False)
                     ]))
-                    clf = SVC(kernel='precomputed', C=1.0).fit(K_train_master[np.ix_(sub_idx, sub_idx)], y_train_full[sub_idx])
-                    splits.append(f1_score(y_test, clf.predict(K_test_master[:, sub_idx])))
                     
-                m = np.mean(splits)
-                q_f1s.append(m)
-                
-                is_met = m >= target_threshold
+                    K_tr_sub = K_train_master[np.ix_(sub_idx, sub_idx)]
+                    K_te_sub = K_test_master[:, sub_idx]
+                    
+                    clf = SVC(kernel='precomputed', C=1.0, probability=True).fit(K_tr_sub, y_tr_bounded[sub_idx])
+                    
+                    splits_f1.append(f1_score(y_test, clf.predict(K_te_sub)))
+                    splits_auc.append(roc_auc_score(y_test, clf.predict_proba(K_te_sub)[:, 1]))
+
+                m_f1, ci_f1 = utils.calculate_95_ci(splits_f1)
+                m_auc, ci_auc = utils.calculate_95_ci(splits_auc)
+                q_f1s.append(m_f1); q_f1_cis.append(ci_f1)
+                q_aucs.append(m_auc); q_auc_cis.append(ci_auc)
+
+                eigs = np.sort(np.linalg.eigvalsh(K_tr_sub))[::-1]
+                cond = eigs[0] / max(eigs[-1], 1e-12)
+                q_conds.append(cond)
+
+                is_met = m_f1 >= classical_target_f1
                 target_reached_list.append(is_met)
-                
                 if exact_n_reached is None and is_met:
                     exact_n_reached = n
-            
-            models_to_plot[q_map] = q_f1s
-            df_sweep[f'{q_map}_F1'] = q_f1s
-            df_sweep[f'{q_map}_Reached_Target'] = target_reached_list
-            
-            if exact_n_reached is not None and len(q_f1s) > 0:
-                idx_found = fine_n_list.tolist().index(exact_n_reached)
-                quantum_intersections[q_map] = (exact_n_reached, q_f1s[idx_found])
-                print(f"      [Target Reached] {q_map} hit classical target at N = {exact_n_reached}")
-        
-        # Save exact sample evolution CSV
+
+            f1_data[q_key] = q_f1s; f1_ci_data[q_key] = q_f1_cis
+            auc_data[q_key] = q_aucs; auc_ci_data[q_key] = q_auc_cis
+            cond_num_data[q_key] = q_conds
+
+            df_sweep[f'{q_key}_F1'] = q_f1s
+            df_sweep[f'{q_key}_ROC_AUC'] = q_aucs
+            df_sweep[f'{q_key}_Condition_Number'] = q_conds
+            df_sweep[f'{q_key}_Reached_Target'] = target_reached_list
+
+            if exact_n_reached is not None:
+                idx_f = fine_n_list.tolist().index(exact_n_reached)
+                quantum_intersections[q_key] = (exact_n_reached, q_f1s[idx_f])
+                print(f"      [Target Reached] {q_key} hit classical target at N = {exact_n_reached}")
+
         csv_save_path = os.path.join(RESULTS_DIR, f"optimal_N_search_{ds_name}.csv")
         df_sweep.to_csv(csv_save_path, index=False)
+        print(f"   [Saved] Sweep evolution ledger -> '{csv_save_path}'")
 
-        # Plot Generation with Clean Formatting
+        clean_ds_title = ds_name.replace('_', ' ')
+
+        # -------------------------------------------------------------
+        # PLOT 1: F1 Score vs N (Sample Efficiency)
+        # -------------------------------------------------------------
+        fig, ax = plt.subplots(figsize=(11, 6))
+        for m_name, f1s in f1_data.items():
+            f1s, cis = np.array(f1s), np.array(f1_ci_data[m_name])
+            c = MODEL_COLORS.get(m_name, '#333')
+            ax.plot(fine_n_list, f1s, label=m_name, color=c, linewidth=2.2)
+            ax.fill_between(fine_n_list, f1s - cis, f1s + cis, color=c, alpha=0.12)
+
+        ax.set_title(rf"Sample Efficiency Curve: {clean_ds_title}" + "\n" + r"($F_1$ Score vs. Training Sample Size $N$ with 95% CI)", fontweight='bold', fontsize=13, pad=12)
+        ax.set_xlabel(r"Training Sample Size ($N$)", fontsize=11)
+        ax.set_ylabel(r"Test $F_1$ Score (Mean $\pm$ 95% CI)", fontsize=11)
+        ax.grid(True, linestyle='--', alpha=0.4)
+        ax.legend(loc='lower right', fontsize=10, frameon=True)
+        plt.tight_layout()
+        plt.savefig(os.path.join(RESULTS_DIR, f"plot_sample_efficiency_F1_{ds_name}.png"), dpi=300, bbox_inches='tight')
+        plt.close(fig)
+
+        # -------------------------------------------------------------
+        # PLOT 2: ROC-AUC Score vs N
+        # -------------------------------------------------------------
+        fig, ax = plt.subplots(figsize=(11, 6))
+        for m_name, aucs in auc_data.items():
+            aucs, cis = np.array(aucs), np.array(auc_ci_data[m_name])
+            c = MODEL_COLORS.get(m_name, '#333')
+            ax.plot(fine_n_list, aucs, label=m_name, color=c, linewidth=2.2)
+            ax.fill_between(fine_n_list, aucs - cis, aucs + cis, color=c, alpha=0.12)
+
+        ax.set_title(rf"Classification Performance: {clean_ds_title}" + "\n" + r"(ROC-AUC Score vs. Training Sample Size $N$ with 95% CI)", fontweight='bold', fontsize=13, pad=12)
+        ax.set_xlabel(r"Training Sample Size ($N$)", fontsize=11)
+        ax.set_ylabel(r"Test ROC-AUC Score (Mean $\pm$ 95% CI)", fontsize=11)
+        ax.grid(True, linestyle='--', alpha=0.4)
+        ax.legend(loc='lower right', fontsize=10, frameon=True)
+        plt.tight_layout()
+        plt.savefig(os.path.join(RESULTS_DIR, f"plot_sample_efficiency_ROC_AUC_{ds_name}.png"), dpi=300, bbox_inches='tight')
+        plt.close(fig)
+
+        # -------------------------------------------------------------
+        # PLOT 3: Condition Number (kappa) vs N
+        # -------------------------------------------------------------
+        if cond_num_data:
+            fig, ax = plt.subplots(figsize=(11, 6))
+            for q_key, conds in cond_num_data.items():
+                c = MODEL_COLORS.get(q_key, '#333')
+                ax.plot(fine_n_list, conds, label=q_key, color=c, linewidth=2.2, marker='.')
+
+            ax.set_title(rf"Gram Matrix Condition Number Decay: {clean_ds_title}" + "\n" + r"($\kappa = \lambda_{\max} / \lambda_{\min}$ vs. $N$ - Exponential Concentration Diagnostic)", fontweight='bold', fontsize=13, pad=12)
+            ax.set_xlabel(r"Training Sample Size ($N$)", fontsize=11)
+            ax.set_ylabel(r"Condition Number ($\kappa$, log scale)", fontsize=11)
+            ax.set_yscale('log')
+            ax.grid(True, linestyle='--', alpha=0.4)
+            ax.legend(loc='upper left', fontsize=10, frameon=True)
+            plt.tight_layout()
+            plt.savefig(os.path.join(RESULTS_DIR, f"plot_condition_number_vs_N_{ds_name}.png"), dpi=300, bbox_inches='tight')
+            plt.close(fig)
+
+        # -------------------------------------------------------------
+        # PLOT 4: Samples to Reach Target F1 Score (Optimal N Annotations)
+        # -------------------------------------------------------------
         fig, ax = plt.subplots(figsize=(11, 6.5))
-        colors = {'Classical (RBF)': '#1f77b4', 'Quantum-ZZ': '#9467bd', 'Quantum-CPMap': '#ff7f0e'}
-        
-        for name, f1s in models_to_plot.items():
-            ax.plot(fine_n_list, f1s, label=name, color=colors.get(name, '#333'), linewidth=2.2, marker='.', markersize=4)
-            
-        ax.axhline(target_threshold, color='red', linestyle='--', alpha=0.75, 
-                   label=rf"Classical Target $F_1$ ({target_threshold:.3f} at $N={max_n}$)")
-        
-        # Dynamic offsets to eliminate label collision
-        offset_multiplier = 1
-        for q_map, (n_val, f1_val) in quantum_intersections.items():
-            c = colors.get(q_map)
+        for m_name, f1s in f1_data.items():
+            ax.plot(fine_n_list, f1s, label=m_name, color=MODEL_COLORS.get(m_name, '#333'), linewidth=2.2, marker='.', markersize=4)
+
+        ax.axhline(classical_target_f1, color='red', linestyle='--', alpha=0.75, 
+                   label=rf"Classical Target $F_1$ ({classical_target_f1:.3f} at $N={max_n}$)")
+
+        offset_mult = 1
+        for q_key, (n_val, f1_val) in quantum_intersections.items():
+            c = MODEL_COLORS.get(q_key)
             ax.axvline(n_val, color=c, linestyle=':', alpha=0.8, linewidth=1.5)
             ax.scatter([n_val], [f1_val], color=c, zorder=6, s=110, edgecolor='black', marker='*')
             
-            text_y_offset = 25 if (offset_multiplier % 2 == 1) else -35
+            y_off = 25 if (offset_mult % 2 == 1) else -35
             ax.annotate(
-                f"{q_map}\nOptimal Target N = {n_val}", 
+                f"{q_key}\nOptimal Target N = {n_val}", 
                 xy=(n_val, f1_val), 
-                xytext=(20, text_y_offset),
+                xytext=(20, y_off),
                 textcoords="offset points", 
                 color=c, 
                 fontweight='bold',
@@ -457,33 +593,61 @@ def execute_continuous_sweep_and_plot():
                 bbox=dict(boxstyle="round,pad=0.3", facecolor="white", edgecolor=c, alpha=0.85),
                 arrowprops=dict(arrowstyle="->", color=c, lw=1.2)
             )
-            offset_multiplier += 1
+            offset_mult += 1
 
-        clean_title_ds = ds_name.replace('_', ' ')
         ax.set_title(
-            f"Samples to Reach Target F1 Score: {clean_title_ds}\n"
+            f"Samples to Reach Target F1 Score: {clean_ds_title}\n"
             f"(Target Baseline = Classical F1 at N={max_n})", 
             fontweight='bold', fontsize=13, pad=12
         )
-        
         ax.set_xlabel(r"Number of Training Samples ($N$)", fontsize=11)
         ax.set_ylabel(r"Test $F_1$ Score", fontsize=11)
         ax.grid(True, linestyle='--', alpha=0.4)
         ax.legend(loc='lower right', fontsize=10, frameon=True)
-        
+
         plt.tight_layout()
-        save_path = os.path.join(RESULTS_DIR, f"plot_samples_to_target_{ds_name}.png")
-        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        plt.savefig(os.path.join(RESULTS_DIR, f"plot_samples_to_target_{ds_name}.png"), dpi=300, bbox_inches='tight')
         plt.close(fig)
 
 
+def locate_kernel_matrices(ds_dir, q_map_name):
+    """
+    Locates cached kernel matrices in main/ and ablation/ folders.
+    Prints informative notice if the matrix file is missing.
+    """
+    if q_map_name == 'Quantum-ZZ (Linear)':
+        train_p = os.path.join(ds_dir, "main", f"cache_Quantum-ZZ_seed{config.SEED}_train.npy")
+        test_p = os.path.join(ds_dir, "main", f"cache_Quantum-ZZ_seed{config.SEED}_test.npy")
+    elif q_map_name == 'Quantum-CPMap':
+        train_p = os.path.join(ds_dir, "main", f"cache_Quantum-CPMap_seed{config.SEED}_train.npy")
+        test_p = os.path.join(ds_dir, "main", f"cache_Quantum-CPMap_seed{config.SEED}_test.npy")
+    elif q_map_name == 'Quantum-ZZ (Full)':
+        # Locate ablation folder for ZZ full
+        ablation_folder = os.path.join(ds_dir, "ablation", "ZZ_entfull_bw1.0_noiseFalse")
+        train_p = os.path.join(ablation_folder, "train_kernel.npy")
+        test_p = os.path.join(ablation_folder, "test_kernel.npy")
+    else:
+        return None, None
+
+    if os.path.exists(train_p) and os.path.exists(test_p):
+        return np.load(train_p), np.load(test_p)
+    else:
+        print(f"   [Notice] Kernel matrix for '{q_map_name}' in '{os.path.basename(ds_dir)}' not ready yet.")
+        return None, None
+
+
+
 # =====================================================================
-# 5. ABLATION INSIGHT DASHBOARDS
+# 4. ABLATION INSIGHT DASHBOARDS
 # =====================================================================
 def render_ablation_dashboards():
     print("\n[*] Processing Ablation Dashboards...")
     csv_files = [f for f in os.listdir(RESULTS_DIR) if f.startswith("ablation_report_") and f.endswith(".csv")]
     
+    if not csv_files:
+        print("   [Notice] No ablation CSV reports found in 'results/'. Skipping dashboards.")
+        return
+
     for csv_file in csv_files:
         try:
             ds_slug = csv_file.replace("ablation_report_", "").replace(".csv", "")
@@ -495,23 +659,24 @@ def render_ablation_dashboards():
             ax1, ax2, ax3, ax4 = plt.subplot(2,3,1), plt.subplot(2,3,2), plt.subplot(2,3,3), plt.subplot(2,3,4)
             ax5 = plt.subplot(2,3,(5,6))
             
-            fmaps, colors = df['Feature Map'].unique(), {'ZZ': '#9467bd', 'CPMap': '#ff7f0e'}
+            fmaps = df['Feature Map'].unique()
+            abl_colors = {'ZZ': '#9467bd', 'CPMap': '#ff7f0e'}
             
             for fmap in fmaps:
                 sub = df[df['Feature Map'] == fmap]
                 g1 = sub.groupby('Bandwidth')['Target Alignment'].mean()
-                ax1.plot(g1.index, g1.values, marker='o', label=fmap, color=colors.get(fmap, '#333'))
+                ax1.plot(g1.index, g1.values, marker='o', label=fmap, color=abl_colors.get(fmap, '#333'))
                 g2 = sub.groupby('Bandwidth')['Test F1'].mean()
-                ax2.plot(g2.index, g2.values, marker='s', label=fmap, color=colors.get(fmap, '#333'))
+                ax2.plot(g2.index, g2.values, marker='s', label=fmap, color=abl_colors.get(fmap, '#333'))
                 g3 = sub.groupby('Bandwidth')['Condition Number'].mean()
-                ax3.plot(g3.index, g3.values, marker='^', label=fmap, color=colors.get(fmap, '#333'))
+                ax3.plot(g3.index, g3.values, marker='^', label=fmap, color=abl_colors.get(fmap, '#333'))
 
             ax1.set_title(r"Kernel Target Alignment vs Bandwidth ($\sigma$)"); ax1.set_xlabel(r"Bandwidth ($\sigma$)"); ax1.legend(); ax1.grid(True, alpha=0.5)
             ax2.set_title(r"Test $F_1$ Score vs Bandwidth ($\sigma$)"); ax2.set_xlabel(r"Bandwidth ($\sigma$)"); ax2.legend(); ax2.grid(True, alpha=0.5)
             ax3.set_title(r"Gram Matrix Condition No. vs Bandwidth ($\sigma$)"); ax3.set_xlabel(r"Bandwidth ($\sigma$)"); ax3.set_yscale('log'); ax3.legend(); ax3.grid(True, alpha=0.5)
 
             res_df = df[['Feature Map', 'CNOT Count']].drop_duplicates().groupby('Feature Map').mean()
-            ax4.bar(res_df.index, res_df['CNOT Count'], color=[colors.get(x, '#333') for x in res_df.index], edgecolor='black', alpha=0.85)
+            ax4.bar(res_df.index, res_df['CNOT Count'], color=[abl_colors.get(x, '#333') for x in res_df.index], edgecolor='black', alpha=0.85)
             ax4.set_title(r"Entangling Gate Overhead ($N_{\mathrm{CNOT}}$)")
             ax4.set_ylabel("Count")
             
@@ -526,13 +691,14 @@ def render_ablation_dashboards():
 
 
 # =====================================================================
-# 6. SPECTRAL DIAGNOSTICS & VARIANCE
+# 5. SPECTRAL DIAGNOSTICS & VARIANCE
 # =====================================================================
 def plot_all_spectral_diagnostics():
     print("\n[*] Extracting Spectral Diagnostics and Off-Diagonal Variance...")
     kernel_files = glob.glob(os.path.join(config.CACHE_DIR_BASE, "**", "*_train.npy"), recursive=True)
     
     if not kernel_files:
+        print("   [Notice] No cached .npy kernel files found for spectral diagnostics.")
         return
 
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
@@ -581,6 +747,7 @@ def plot_all_spectral_diagnostics():
     plot_path = os.path.join(RESULTS_DIR, "plot_kernel_spectral_diagnostics.png")
     plt.savefig(plot_path, dpi=300, bbox_inches='tight')
     plt.close(fig)
+    print(f"   [Saved] Kernel Spectral Diagnostics -> '{plot_path}'")
 
 
 # =====================================================================
@@ -589,6 +756,6 @@ def plot_all_spectral_diagnostics():
 if __name__ == "__main__":
     generate_resource_table()
     plot_circuit_evaluations_vs_N()
-    execute_continuous_sweep_and_plot()
+    execute_continuous_sweep_and_all_plots()
     render_ablation_dashboards()
     plot_all_spectral_diagnostics()
