@@ -4,3 +4,4 @@ __pycache__
 /processed_fraud_data.csv
 .DS_Store
 Miniconda3-latest-Linux-x86_64.shMiniconda3-latest-Linux-x86_64.sh
+/old_code/processed_fraud_data.csv

@@ -1,0 +1,4 @@
+Configuration,Qubits,CNOTs / Overlap Circuit (U^dagger U),1-Qubit Gates / Overlap Circuit,Total Operations / Overlap Circuit
+Quantum-ZZ (Linear),8,28,16,44
+Quantum-ZZ (Full),8,112,16,128
+Quantum-CPMap,5,48,0,48

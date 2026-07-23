@@ -1,0 +1,22 @@
+=== ABLATION STUDY SUMMARY: Primary Synthetic (Shells) ===
+ -> Cumulative Compute Footprint: CPU Years = 1.84e-02
+
+Feature Map Entanglement  Bandwidth  Noisy Backend  Qubits  CNOT Count  Target Alignment  Spectral Variance  Condition Number  Test F1  Test AUC
+         ZZ       linear        0.5          False       8          28          0.247286           0.003864      1.173209e+03 0.993711  1.000000
+         ZZ       linear        0.5           True       8          28          0.247286           0.003864      1.173209e+03 0.993711  1.000000
+         ZZ       linear        1.0          False       8          28          0.109346           0.000569      5.998265e+01 0.934211  0.985625
+         ZZ       linear        1.0           True       8          28          0.109346           0.000569      5.998265e+01 0.934211  0.985625
+         ZZ       linear        2.0          False       8          28          0.117830           0.000475      6.397217e+01 0.817518  0.912969
+         ZZ       linear        2.0           True       8          28          0.117830           0.000475      6.397217e+01 0.817518  0.912969
+         ZZ         full        0.5          False       8         112          0.223564           0.000791      1.038354e+02 0.993711  1.000000
+         ZZ         full        0.5           True       8         112          0.223564           0.000791      1.038354e+02 0.993711  1.000000
+         ZZ         full        1.0          False       8         112          0.149714           0.000292      2.671717e+01 0.987342  0.998125
+         ZZ         full        1.0           True       8         112          0.149714           0.000292      2.671717e+01 0.987342  0.998125
+         ZZ         full        2.0          False       8         112          0.249444           0.000577      7.380035e+01 0.987500  0.998750
+         ZZ         full        2.0           True       8         112          0.249444           0.000577      7.380035e+01 0.987500  0.998750
+      CPMap       linear        0.5          False       5          48          0.119117           0.010222      4.788693e+11 1.000000  1.000000
+      CPMap       linear        0.5           True       5          48          0.119117           0.010222      4.788693e+11 1.000000  1.000000
+      CPMap       linear        1.0          False       5          48          0.252406           0.043898      3.998995e+08 1.000000  1.000000
+      CPMap       linear        1.0           True       5          48          0.252406           0.043898      3.998995e+08 1.000000  1.000000
+      CPMap       linear        2.0          False       5          48          0.412686           0.019661      2.715369e+05 0.993711  1.000000
+      CPMap       linear        2.0           True       5          48          0.412686           0.019661      2.715369e+05 0.993711  1.000000

@@ -263,7 +263,7 @@ def run_ablation_matrix_suite(X_all, y_all, dataset_name, is_real_data=False, n_
     print(f"\n[Ablation Suite] Launching parallel architectural matrix for '{dataset_name}' using {effective_cores} cores...")
     
     # Restored explicit batch_size=2 alongside loky backend for balanced parallel scheduling
-    ablation_records = Parallel(n_jobs=effective_cores, backend='loky', batch_size=2, verbose=5)(
+    ablation_records = Parallel(n_jobs=effective_cores, backend='multiprocessing', batch_size=2, verbose=5)(
         delayed(run_single_ablation)(*task, X_train_p, X_test_p, y_train, y_test, dataset_name, chunk_sz) for task in tasks
     )
     

@@ -1,5 +1,5 @@
 === ABLATION STUDY SUMMARY: Positive Control (ZZ-Generated) ===
- -> Cumulative Compute Footprint: CPU Years = 7.86e-03
+ -> Cumulative Compute Footprint: CPU Years = 4.76e-05
 
 Feature Map Entanglement  Bandwidth  Noisy Backend  Qubits  CNOT Count  Target Alignment  Spectral Variance  Condition Number  Test F1  Test AUC
          ZZ       linear        0.5          False       8          28          0.107753           0.003477      3.297135e+02 0.693069  0.843433
@@ -14,8 +14,8 @@ Feature Map Entanglement  Bandwidth  Noisy Backend  Qubits  CNOT Count  Target A
          ZZ         full        1.0           True       8         112          0.051980           0.000268      1.675272e+01 0.684685  0.727504
          ZZ         full        2.0          False       8         112          0.049428           0.000491      2.958922e+01 0.691589  0.781930
          ZZ         full        2.0           True       8         112          0.049428           0.000491      2.958922e+01 0.691589  0.781930
-      CPMap       linear        0.5          False       5          48          0.003709           0.011361      1.027468e+11 0.605505  0.613570
-      CPMap       linear        0.5           True       5          48          0.003709           0.011361      1.027468e+11 0.605505  0.613570
+      CPMap       linear        0.5          False       5          48          0.003709           0.011361      1.027467e+11 0.605505  0.613570
+      CPMap       linear        0.5           True       5          48          0.003709           0.011361      1.027467e+11 0.605505  0.613570
       CPMap       linear        1.0          False       5          48          0.016883           0.044762      1.212447e+08 0.642202  0.659107
       CPMap       linear        1.0           True       5          48          0.016883           0.044762      1.212447e+08 0.642202  0.659107
       CPMap       linear        2.0          False       5          48          0.066883           0.017484      8.028891e+04 0.653465  0.769956
