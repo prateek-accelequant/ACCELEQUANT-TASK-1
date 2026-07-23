@@ -210,22 +210,27 @@ class ProductionQuantumKernelManager:
 
     def get_resource_counts(self):
         """
-        Calculates exact hardware cost by natively constructing the full 
-        compute-uncompute circuit without transpiler optimization.
+        Calculates exact hardware cost by decomposing custom feature map blocks 
+        down to native 1-qubit and 2-qubit (CX) operations for the compute-uncompute circuit.
         """
-        exact_map = self.feature_map.decompose()
-        compute_uncompute_circ = exact_map.compose(exact_map.inverse())
-        gate_counts = compute_uncompute_circ.count_ops()
-        
-        single_gates = (gate_counts.get('h', 0) + 
-                        gate_counts.get('rz', 0) + 
-                        gate_counts.get('ry', 0) + 
-                        gate_counts.get('rx', 0))
-        
+        import config
+        # Fully unroll custom gate blocks (C, P, ZZ gates) down to basis gates
+        decomposed_map = self.feature_map.decompose()
+        if self.map_type == 'CPMap':
+            decomposed_map = decomposed_map.decompose()
+
+        # Construct exact compute-uncompute overlap circuit: U^\dagger(x') U(x)
+        overlap_circuit = decomposed_map.compose(decomposed_map.inverse())
+        ops = overlap_circuit.count_ops()
+
+        cnot_count = ops.get('cx', 0)
+        sq_gates = ops.get('h', 0) + ops.get('rz', 0) + ops.get('ry', 0) + ops.get('rx', 0)
+
         return {
             'qubits': self.num_qubits,
-            'single_qubit_gates': single_gates,
-            'cnot_gates': gate_counts.get('cx', 0)
+            'single_qubit_gates': sq_gates,
+            'cnot_gates': cnot_count,
+            'total_gates_per_circuit': cnot_count + sq_gates
         }
 
     def calculate_spectral_diagnostics(self, K_train):
