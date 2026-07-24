@@ -17,12 +17,8 @@ def main():
     print("="*60)
     
     try:
-        _user_input = input("Enter the number of parallel workers to use [Default: 4, Max: 12]: ").strip()
+        _user_input = input("Enter the number of parallel workers to use [Default: 4]: ").strip()
         N_CORES = int(_user_input) if _user_input else 4
-        # Enforce max 12 core limit
-        if N_CORES > 12:
-            print("[!] Requested cores exceed maximum limit. Capping to 12 cores.")
-            N_CORES = 12
     except ValueError:
         print("[!] Invalid input. Defaulting to 4 workers for stability.")
         N_CORES = 4
